@@ -3,6 +3,8 @@ import os
 import sys
 import unittest
 
+from numpy.random.mtrand import choice
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(HERE, "..")
 
@@ -38,7 +40,7 @@ class TestHierarchical(unittest.TestCase):
     def test_2(self):
         program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
         choices = program.choice()
-        assert len(choices) == 3
-        program.freeze([0,0])
+        assert len(choices) == 1
+        program.freeze([0,2])
         res = program.evaluate()
-        assert res == 2
+        assert res == 6

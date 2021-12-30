@@ -107,6 +107,15 @@ class Expression:
     def __invert__(self):
         return UnaryExpression(UNA_OPS_SYNTAX_2_ATTR["__invert__"], self)
 
+    def __getitem__(self, item):
+        return ExpressionItemAccess(self, item)
+
+    def __getattribute__(self, __name: str):
+        try:
+            return super().__getattribute__(__name)
+        except AttributeError:
+            return ExpressionAttributeAccess(self, __name)
+
     def __call__(self, *args, **kwargs):
         return ExpressionCallExpression(self, *args, **kwargs)
 
@@ -115,24 +124,27 @@ class Expression:
 
         def choice_aux(o):
 
-            if isinstance(o, VarExpression):
-                choices.append(o)
-
             if isinstance(o, Expression):
-                choices.extend(o.choice())
+
+                if isinstance(o, VarExpression):
+                    choices.append(o)
+                else:
+                    choices.append(o.choice())
 
             return choices
 
         tree.map_structure(choice_aux, self.__dict__)
 
-        return choices[::-1]
+        choices = tree.flatten(choices[::-1])
+
+        return choices
 
     def freeze(self, choice):
 
         Q = (
             choice
             if isinstance(choice, collections.deque)
-            else collections.deque(choice[::-1])
+            else collections.deque(choice)
         )
 
         # propagate the materialization
@@ -248,11 +260,11 @@ class FunctionCallExpression(Expression):
             f"{prefix}{'.' if prefix and fname != '' else ''}{fname}({args + kwargs})"
         )
 
-    def __getattribute__(self, __name: str):
-        try:
-            return super().__getattribute__(__name)
-        except AttributeError:
-            return ExpressionAttributeAccess(self, __name)
+    # def __getattribute__(self, __name: str):
+    #     try:
+    #         return super().__getattribute__(__name)
+    #     except AttributeError:
+    #         return ExpressionAttributeAccess(self, __name)
 
     def evaluate(self):
 
@@ -274,8 +286,22 @@ class FunctionCallExpression(Expression):
             return self.function(*self.args, **self.kwargs)
 
 
+class ExpressionItemAccess(Expression):
+    def __init__(self, expression, item):
+        self.expression = expression
+        self.item = item
+
+    def __repr__(self) -> str:
+        return f"{self.expression}[{self.item}]"
+
+    def evaluate(self):
+        self.evaluate_children()
+
+        return self.expression[self.item]
+
+
 class ExpressionAttributeAccess(Expression):
-    def __init__(self, expression, name) -> None:
+    def __init__(self, expression, name):
         self.expression = expression
         self.name = name
 
@@ -307,6 +333,24 @@ class ExpressionCallExpression(Expression):
             args += ", "
 
         return f"{self.expression}({args + kwargs})"
+
+    def freeze(self, choice):
+
+        Q = (
+            choice
+            if isinstance(choice, collections.deque)
+            else collections.deque(choice)
+        )
+        self.expression.freeze(Q)
+
+        # propagate the materialization
+        def freeze_aux(o):
+            
+            if isinstance(o, Expression):
+                o.freeze(Q)
+
+        tree.map_structure(freeze_aux, self.args)
+        tree.map_structure(freeze_aux, self.kwargs)
 
     def evaluate(self):
 
@@ -367,6 +411,12 @@ def meta(obj):
 class VarExpression(Expression):
 
     value = None
+    var_id = 0
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.var_id = VarExpression.var_id
+        VarExpression.var_id += 1
 
     def __eq__(self, other):
         return type(self) is type(other) and self.value == other.value
@@ -379,15 +429,19 @@ class VarExpression(Expression):
         self.value = choice.popleft()
 
     def evaluate(self):
-        return self.value
+        if isinstance(self.value, Expression):
+            return self.value.evaluate()
+        else:
+            return self.value
 
 
 class List(VarExpression):
     def __init__(self, l) -> None:
+        super().__init__()
         self._array = list(l)
 
     def __repr__(self) -> str:
-        if not(self.value is None):
+        if not (self.value is None):
             return self.value.__repr__()
         else:
             str_ = str(self._array)[1:-1]
@@ -412,7 +466,7 @@ class List(VarExpression):
         idx = choice.popleft()
         if idx < 0 or idx >= len(self):
             raise ValueError(
-                f"choice for variable List should be a correct index but is {idx}"
+                f"choice for variable {self} should be a correct index but is {idx}"
             )
         self.value = self._array[idx]
 
@@ -429,11 +483,12 @@ class List(VarExpression):
 
 class Int(VarExpression):
     def __init__(self, lower, upper) -> None:
+        super().__init__()
         self._lower = lower
         self._upper = upper
 
     def __repr__(self) -> str:
-        if not(self.value is None):
+        if not (self.value is None):
             return self.value.__repr__()
         else:
             return f"Int({self._lower}, {self._upper})"
@@ -450,6 +505,41 @@ class Int(VarExpression):
         return rng.randint(self._lower, self._upper, size=size)
 
 
-def sample(n, exp):
-    for i in range(n):
-        yield exp.clone()
+# sample programs
+
+
+def sample_from_var(choices, rng):
+    s = []
+    for var_exp in choices:
+
+        s.append(var_exp.sample(rng=rng))
+
+        if isinstance(var_exp, List) and isinstance(var_exp[s[-1]], Expression):
+            s.extend(sample_from_var(var_exp[s[-1]].choice(), rng))
+
+    return s
+
+
+def sample_choices(n, exp, rng=None):
+
+    if rng is None:
+        rng = np.random.RandomState()
+
+    choices = exp.choice()
+    for _ in range(n):
+
+        variable_choice = sample_from_var(choices, rng)
+        yield variable_choice
+
+
+def sample_programs(n, exp, rng=None):
+
+    if rng is None:
+        rng = np.random.RandomState()
+
+    for variable_choice in sample_choices(n, exp, rng):
+        print("vc: ", variable_choice)
+        exp_clone = exp.clone()
+        exp_clone.freeze(variable_choice)
+
+        yield variable_choice, exp_clone
