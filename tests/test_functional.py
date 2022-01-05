@@ -82,3 +82,9 @@ class TestFunctional(unittest.TestCase):
         program.freeze(choice)
         res = program.evaluate()
         assert res == 4
+
+    def test_builtin_function(self):
+
+        program = mpy.meta(sum)([1 for i in range(10)])
+        res = program.evaluate()
+        assert res == 10

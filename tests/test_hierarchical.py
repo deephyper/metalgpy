@@ -1,9 +1,7 @@
-import inspect
 import os
 import sys
 import unittest
 
-from numpy.random.mtrand import choice
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(HERE, "..")
@@ -44,3 +42,12 @@ class TestHierarchical(unittest.TestCase):
         program.freeze([0,2])
         res = program.evaluate()
         assert res == 6
+
+    def test_3(self):
+        rng = np.random.RandomState(42)
+        mpy.VarExpression.var_id = 0
+        program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
+        choices = program.choice()
+        d = mpy.sample_from_var(choices, rng)
+        print(d)
+        assert d == [0, 0]
