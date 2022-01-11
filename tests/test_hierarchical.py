@@ -48,6 +48,6 @@ class TestHierarchical(unittest.TestCase):
         mpy.VarExpression.var_id = 0
         program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
         choices = program.choice()
-        d = mpy.sample_from_var(choices, rng)
+        d = mpy.sample_values_from_choices(choices, rng)
         print(d)
         assert d == [0, 0]

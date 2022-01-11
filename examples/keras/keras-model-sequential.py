@@ -23,9 +23,13 @@ choices = model.choice()
 
 rng = np.random.RandomState(42)
 
-for choice, model in mpy.sample_programs(model, size=5, rng=rng, deep=True):
+for choice, model in mpy.sample(model, size=5, rng=rng, deepcopy=True):
     print(" ** Sampling new model: ")
+
     print("    - choice: ", choice, end="\n\n")
+
     model = model.evaluate()
     model.summary()
+
+
     print("\n"*3)

@@ -284,6 +284,8 @@ class FunctionCallExpression(Expression):
 
         if self.function_parent:
             if self.function.__name__ == "__init__":
+                # self.function_parent is a class by using the syntax
+                # class(*args, **kwargs) we call __init__
                 return self.function_parent(*self.args, **self.kwargs)
             else:
                 return self.function(self.function_parent, *self.args, **self.kwargs)

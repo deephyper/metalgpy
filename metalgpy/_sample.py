@@ -3,7 +3,7 @@ import numpy as np
 from ._expression import List, Expression
 
 
-def sample_from_var(choices: list, rng) -> dict:
+def sample_values_from_choices(choices: list, rng) -> dict:
     """Sample variables from a list of variable choice.
 
     Args:
@@ -19,13 +19,13 @@ def sample_from_var(choices: list, rng) -> dict:
         s.append(var_exp.sample(rng=rng))
 
         if isinstance(var_exp, List) and isinstance(var_exp[s[-1]], Expression):
-            d = sample_from_var(var_exp[s[-1]].choice(), rng)
+            d = sample_values_from_choices(var_exp[s[-1]].choice(), rng)
             s.extend(d)
         
     return s
 
 
-def sample_choices(exp, size=1, rng=None):
+def sample_values(exp, size=1, rng=None):
 
     if rng is None:
         rng = np.random.RandomState()
@@ -33,17 +33,18 @@ def sample_choices(exp, size=1, rng=None):
     choices = exp.choice()
     for _ in range(size):
 
-        variable_choice = sample_from_var(choices, rng)
+        variable_choice = sample_values_from_choices(choices, rng)
         yield variable_choice
 
 
-def sample_programs(exp, size, rng=None, deep=False):
+def sample(exp, size, rng=None, deepcopy=False):
 
     if rng is None:
         rng = np.random.RandomState()
 
-    for variable_choice in sample_choices(exp, size, rng):
-        exp_clone = exp.clone(deep=deep)
+    for variable_choice in sample_values(exp, size, rng):
+        exp_clone = exp.clone(deep=deepcopy)
         exp_clone.freeze(variable_choice)
 
         yield variable_choice, exp_clone
+
