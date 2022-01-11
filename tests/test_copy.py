@@ -35,7 +35,7 @@ class TestCopy(unittest.TestCase):
         assert y_choices[0] == mpy.List([1,2,3])
         assert y_choices[1] == mpy.List([4,5,6])
 
-        foo_clone = foo.clone()
+        foo_clone = foo.clone(deep=True)
         foo_clone_choices = foo_clone.choice()
         assert len(foo_clone_choices) == 1
         assert foo_clone_choices[0] == mpy.List([1,2,3])

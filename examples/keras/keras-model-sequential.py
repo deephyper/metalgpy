@@ -13,7 +13,7 @@ model = Sequential([
     *[mpy.List([
         Lambda(lambda x: x), 
         Dense(mpy.Int(8, 32), activation="relu")
-        ]) for _ in range(1)
+        ]) for _ in range(5)
     ],
     tf.keras.layers.Dense(10)
 ])
@@ -23,7 +23,7 @@ choices = model.choice()
 
 rng = np.random.RandomState(42)
 
-for choice, model in mpy.sample_programs(5, model, rng):
+for choice, model in mpy.sample_programs(model, size=5, rng=rng, deep=True):
     print(" ** Sampling new model: ")
     print("    - choice: ", choice, end="\n\n")
     model = model.evaluate()

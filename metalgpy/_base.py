@@ -135,7 +135,7 @@ class Expression:
 
         tree.map_structure(choice_aux, self.__dict__)
 
-        choices = tree.flatten(choices[::-1])
+        choices = tree.flatten(choices)
 
         return choices
 
@@ -166,14 +166,11 @@ class Expression:
                 eval_ = o
             return eval_
 
-        self.map(evaluate_aux)
+        self.__dict__ = tree.map_structure(evaluate_aux, self.__dict__)
 
     @abc.abstractmethod
     def evaluate(self):
         pass
-
-    def map(self, function):
-        self.__dict__ = tree.map_structure(function, self.__dict__)
 
     def __copy__(self):
         cls = self.__class__
@@ -187,8 +184,11 @@ class Expression:
         obj.__dict__.update(copy.deepcopy(self.__dict__))
         return obj
 
-    def clone(self):
-        c = copy.deepcopy(self)
+    def clone(self, deep=False):
+        if deep:
+            c = copy.deepcopy(self)
+        else:
+            c = copy.copy(self)
         return c
 
 
@@ -327,6 +327,27 @@ class ExpressionCallExpression(Expression):
             args += ", "
 
         return f"{self.expression}({args + kwargs})"
+    
+    def choice(self):
+        choices = self.expression.choice()
+
+        def choice_aux(o):
+
+            if isinstance(o, Expression):
+
+                if isinstance(o, VarExpression):
+                    choices.append(o)
+                else:
+                    choices.append(o.choice())
+
+            return choices
+
+        tree.map_structure(choice_aux, self.args)
+        tree.map_structure(choice_aux, self.kwargs)
+
+        choices = tree.flatten(choices)
+
+        return choices
 
     def freeze(self, choice):
 
@@ -437,7 +458,7 @@ class VarExpression(Expression):
 
 
 class List(VarExpression):
-    def __init__(self, l) -> None:
+    def __init__(self, l):
         super().__init__()
         self._array = list(l)
 
@@ -493,7 +514,14 @@ class List(VarExpression):
         return Expression.choice(self)[::-1]
 
 class Int(VarExpression):
-    def __init__(self, lower, upper) -> None:
+    """Defines an discrete variable.
+
+        Args:
+            lower (int): the lower bound of the variable discrete interval.
+            upper (int): the upper bound of the variable discrete interval.
+    """
+
+    def __init__(self, lower: int, upper: int):
         super().__init__()
         self._lower = lower
         self._upper = upper
@@ -534,7 +562,15 @@ class Int(VarExpression):
 
 
 class Float(VarExpression):
+    """Defines a continuous variable.
+
+        Args:
+            lower (float): the lower bound of the variable continuous interval.
+            upper (float): the upper bound of the variable continuous interval.
+    """
+
     def __init__(self, lower: float, upper: float) -> None:
+        
         super().__init__()
         self._lower = lower
         self._upper = upper
@@ -688,13 +724,13 @@ def sample_choices(exp, size=1, rng=None):
         yield variable_choice
 
 
-def sample_programs(n, exp, rng=None):
+def sample_programs(exp, size, rng=None, deep=False):
 
     if rng is None:
         rng = np.random.RandomState()
 
-    for variable_choice in sample_choices(n, exp, rng):
-        exp_clone = exp.clone()
+    for variable_choice in sample_choices(exp, size, rng):
+        exp_clone = exp.clone(deep=deep)
         exp_clone.freeze(variable_choice)
 
         yield variable_choice, exp_clone
