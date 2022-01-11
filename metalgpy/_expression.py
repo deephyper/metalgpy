@@ -170,12 +170,23 @@ class Expression:
 
     @abc.abstractmethod
     def evaluate(self):
-        pass
+        """Evaluate the value of the current expression."""
+        raise NotImplementedError
 
     def __copy__(self):
         cls = self.__class__
         obj = cls.__new__(cls)
-        obj.__dict__.update(copy.copy(self.__dict__))
+
+        def copy_aux(obj):
+
+            if isinstance(obj, Expression):
+                return copy.copy(obj)
+            else:
+                return obj
+
+        new__dict__ = tree.map_structure(copy_aux, self.__dict__)
+        obj.__dict__.update(new__dict__)
+
         return obj
 
     def __deepcopy__(self, memo):
