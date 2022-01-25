@@ -2,10 +2,11 @@ import abc
 import collections
 import copy
 import inspect
+from random import choice
 
 import numpy as np
+import scipy.stats
 import tree
-
 
 # https://docs.python.org/3/reference/datamodel.html#special-method-names
 # https://docs.python.org/3/library/operator.html
@@ -50,62 +51,68 @@ class Expression:
     def __add__(self, other):
         return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__add__"])
 
+    def __radd__(self, other):
+        return BinaryExpression(other, self, BIN_OPS_ATTR_2_SYNTAX["__add__"])
+
     def __sub__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__sub__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__sub__"])
 
     def __mul__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__mul__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__mul__"])
+
+    def __rmul__(self, other):
+        return BinaryExpression(other, self, BIN_OPS_ATTR_2_SYNTAX["__mul__"])
 
     def __matmul__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__matmul__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__matmul__"])
 
     def __truediv__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__truediv__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__truediv__"])
 
     def __floordiv__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__floordiv__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__floordiv__"])
 
     def __mod__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__mod__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__mod__"])
 
     # order and comparison operators
     def __lt__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__lt__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__lt__"])
 
     def __le__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__le__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__le__"])
 
     def __eq__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__eq__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__eq__"])
 
     def __ne__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__ne__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__ne__"])
 
     def __gt__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__gt__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__gt__"])
 
     def __ge__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__ge__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__ge__"])
 
     # logic operators
     def __and__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__and__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__and__"])
 
     def __xor__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__xor__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__xor__"])
 
     def __or__(self, other):
-        return BinaryExpression(self, other, BIN_OPS_SYNTAX_2_ATTR["__or__"])
+        return BinaryExpression(self, other, BIN_OPS_ATTR_2_SYNTAX["__or__"])
 
     # unary operators
     def __pos__(self):
-        return UnaryExpression(UNA_OPS_SYNTAX_2_ATTR["__pos__"], self)
+        return UnaryExpression(UNA_OPS_ATTR_2_SYNTAX["__pos__"], self)
 
     def __neg__(self):
-        return UnaryExpression(UNA_OPS_SYNTAX_2_ATTR["__neg__"], self)
+        return UnaryExpression(UNA_OPS_ATTR_2_SYNTAX["__neg__"], self)
 
     def __invert__(self):
-        return UnaryExpression(UNA_OPS_SYNTAX_2_ATTR["__invert__"], self)
+        return UnaryExpression(UNA_OPS_ATTR_2_SYNTAX["__invert__"], self)
 
     def __getitem__(self, item):
         return ExpressionItemAccess(self, item)
@@ -192,6 +199,7 @@ class Expression:
     def __deepcopy__(self, memo):
         cls = self.__class__
         obj = cls.__new__(cls)
+        memo[id(self)] = obj
         obj.__dict__.update(copy.deepcopy(self.__dict__))
         return obj
 
@@ -431,21 +439,41 @@ class VarExpression(Expression):
     value = None
     var_id = 0
 
-    def __init__(self) -> None:
+    def __init__(self, name: str=None) -> None:
         super().__init__()
+        self._name = name
         self.var_id = VarExpression.var_id
         VarExpression.var_id += 1
 
     def __eq__(self, other):
         return type(self) is type(other) and self.value == other.value
 
+    def sample(self, size=None, rng=None, memo=None):
+
+        if rng is None:
+            rng = np.random.RandomState()
+
+        # memoization in case the same VarExpression is used at different places
+        if isinstance(memo, dict) and id(self) in memo:
+            return memo[id(self)]
+
+        s = self._sample(size=size, rng=rng, memo=memo)
+
+        if isinstance(memo, dict):
+            memo[id(self)] = s
+        
+        return s
+
     @abc.abstractmethod
-    def sample(self, size=None, rng=None):
+    def _sample(self, size=None, rng=None, memo=None):
         raise NotImplementedError
 
     @property
     def id(self):
-        return self.var_id
+        if self._name:
+            return self._name
+        else:
+            return self.var_id
 
     def freeze(self, choice):
         self.value = choice.popleft()
@@ -461,16 +489,35 @@ class VarExpression(Expression):
 
 
 class List(VarExpression):
-    def __init__(self, l):
-        super().__init__()
-        self._array = list(l)
+    """Represent a categorical choice.
+
+    Args:
+        values (iterable): an interable with possible values.
+        k (int, optional): the number of values selected in values. Defaults to None.
+        replace (bool, optional): draw from values with replacement. Defaults to False.
+        invariant (bool, optional): values is permutation invariant (e.g., a list of same object types). Defaults to True.
+    """
+
+    def __init__(self, values, k=None, replace=False, invariant=False, name=None):
+
+        super().__init__(name=name)
+        self._array = list(values)
+        self._k = k
+        self._replace = replace
+        self._invariant = invariant
 
     def __repr__(self) -> str:
         if not (self.value is None):
             return self.value.__repr__()
         else:
-            str_ = str(self._array)[1:-1]
-            return f"List({str_})"
+            str_ = str(self._array)
+            if self._k:
+                str_ += f", k={self._k}"
+            if self._replace:
+                str_ += f", replace={self._replace}"
+            if self._invariant:
+                str_ += f", invariant={self._invariant}"
+            return f"List(id={self.id}, {str_})"
 
     def __getitem__(self, item):
         if isinstance(item, int):
@@ -485,7 +532,12 @@ class List(VarExpression):
 
     def __eq__(self, other):
         b = super().__eq__(other)
-        return b and self._array == other._array
+        return (
+            b
+            and self._array == other._array
+            and self._k == other._k
+            and self._replace == other._replace
+        )
 
     def freeze(self, choice):
 
@@ -497,48 +549,89 @@ class List(VarExpression):
         )
 
         idx = choice.popleft()
-        if idx < 0 or idx >= len(self):
-            raise ValueError(
-                f"choice for variable {self} should be a correct index but is {idx}"
-            )
-        self.value = self._array[idx]
+        self.value = self[idx]
 
-        if isinstance(self.value, Expression):
-            self.value.freeze(choice)
+        if isinstance(idx, collections.abc.Iterable):
+            for i in idx:
+                if isinstance(self.value[i], Expression):
+                    self.value[i].freeze(choice)
+        else:
+            if isinstance(self.value, Expression):
+                self.value.freeze(choice)
 
-    def sample(self, size=None, rng=None):
-        if rng is None:
-            rng = np.random.RandomState()
+    def _sample(self, size=None, rng=None, memo=None):
+        
+        # A list is returned for each sample
+        if self._k is not None:
 
-        idx = rng.choice(len(self), size=size)
+            if isinstance(self._k, VarExpression):
+                sample_size = self._k.sample(size=size, rng=rng, memo=memo)
+            else:
+                sample_size = self._k
+
+            if self._invariant:  # permutation invariant
+                if size is not None:
+                    idx = np.array([np.arange(sample_size[i]) for i in range(size)])
+                else:
+                    idx = np.arange(sample_size).tolist()
+            else:
+                if size is not None:
+                    idx = np.array(
+                        [
+                            rng.choice(
+                                len(self), size=sample_size[i], replace=self._replace
+                            )
+                            for i in range(size)
+                        ]
+                    )
+                else:
+                    idx = rng.choice(len(self), size=sample_size, replace=self._replace).tolist()
+
+        else:
+
+            if self._invariant: # permutation invariant
+                idx = 0  
+            else:
+                idx = rng.choice(len(self), size=size)
+
         return idx
 
     def sub_choice(self):
-        return Expression.choice(self)[::-1]
+
+        choices = []
+        if isinstance(self._k, Expression):
+            choices.extend(self._k.choice())
+
+        for i in range(len(self)):
+            if isinstance(self[i], Expression):
+                choices.extend(self[i].choice())
+
+        return choices
 
 
 class Int(VarExpression):
     """Defines an discrete variable.
 
     Args:
-        lower (int): the lower bound of the variable discrete interval.
-        upper (int): the upper bound of the variable discrete interval.
+        low (int): the lower bound of the variable discrete interval.
+        high (int): the upper bound of the variable discrete interval.
     """
 
-    def __init__(self, lower: int, upper: int):
-        super().__init__()
-        self._lower = lower
-        self._upper = upper
+    def __init__(self, low: int, high: int, name: str=None):
+        super().__init__(name=name)
+        self._low = low 
+        self._high = high 
+        self._dist = scipy.stats.randint(low=self._low, high=self._high + 1)
 
     def __repr__(self) -> str:
         if not (self.value is None):
             return self.value.__repr__()
         else:
-            return f"Int({self._lower}, {self._upper})"
+            return f"Int(id={self.id}, low={self._low}, high={self._high})"
 
     def __eq__(self, other):
         b = super().__eq__(other)
-        return b and self._upper == other._upper and self._lower == other._lower
+        return b and self._high == other._upper and self._low == other._lower
 
     def freeze(self, choice):
 
@@ -550,43 +643,42 @@ class Int(VarExpression):
         )
 
         choice = choice.popleft()
-        if self._lower > choice or choice > self._upper:
+        if self._low > choice or choice > self._high:
             raise ValueError(
-                f"choice for variable {self} should be between [{self._lower}, {self._upper}] but is {choice}"
+                f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
             )
         self.value = choice
 
-    def sample(self, size=None, rng=None):
+    def _sample(self, size=None, rng=None, memo=None):
 
-        if rng is None:
-            rng = np.random.RandomState()
-
-        return rng.randint(self._lower, self._upper, size=size)
+        return self._dist.rvs(size=size, random_state=rng)
 
 
 class Float(VarExpression):
     """Defines a continuous variable.
 
     Args:
-        lower (float): the lower bound of the variable continuous interval.
-        upper (float): the upper bound of the variable continuous interval.
+        low (float): the lower bound of the variable continuous interval.
+        high (float): the upper bound of the variable continuous interval.
     """
 
-    def __init__(self, lower: float, upper: float) -> None:
-
-        super().__init__()
-        self._lower = lower
-        self._upper = upper
+    def __init__(self, low: float, high: float, name: str=None):
+        super().__init__(name=name)
+        self._low = low
+        self._high = high
+        self._dist = scipy.stats.uniform(
+            loc=self._low, scale=self._high - self._low
+        )
 
     def __repr__(self) -> str:
         if not (self.value is None):
             return self.value.__repr__()
         else:
-            return f"Float({self._lower}, {self._upper})"
+            return f"Float(id={self.id}, low={self._low}, high={self._high})"
 
     def __eq__(self, other):
         b = super().__eq__(other)
-        return b and self._upper == other._upper and self._lower == other._lower
+        return b and self._high == other._upper and self._low == other._lower
 
     def freeze(self, choice):
 
@@ -598,15 +690,12 @@ class Float(VarExpression):
         )
 
         choice = choice.popleft()
-        if self._lower > choice or choice > self._upper:
+        if self._low > choice or choice > self._high:
             raise ValueError(
-                f"choice for variable {self} should be between [{self._lower}, {self._upper}] but is {choice}"
+                f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
             )
         self.value = choice
 
-    def sample(self, size=None, rng=None):
+    def _sample(self, size=None, rng=None, memo=None):
 
-        if rng is None:
-            rng = np.random.RandomState()
-
-        return rng.uniform(self._lower, self._upper, size=size)
+        return self._dist.rvs(size=size, random_state=rng)

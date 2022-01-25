@@ -3,7 +3,7 @@ import numpy as np
 from ._expression import List, Expression
 
 
-def sample_values_from_choices(choices: list, rng) -> dict:
+def sample_values_from_choices(choices: list, rng, memo=None) -> dict:
     """Sample variables from a list of variable choice.
 
     Args:
@@ -13,15 +13,24 @@ def sample_values_from_choices(choices: list, rng) -> dict:
     Returns:
         dict: keys are variable ids, values are variables values.
     """
-    s = [] # var samples
+    s = []  # var samples
+    memo = memo if memo else {}  # memoization
+
     for var_exp in choices:
 
-        s.append(var_exp.sample(rng=rng))
+        s.append(var_exp.sample(rng=rng, memo=memo))
 
-        if isinstance(var_exp, List) and isinstance(var_exp[s[-1]], Expression):
-            d = sample_values_from_choices(var_exp[s[-1]].choice(), rng)
-            s.extend(d)
-        
+        if isinstance(var_exp, List):
+            if isinstance(s[-1], list):
+                for i in s[-1]:
+                    if isinstance(var_exp[i], Expression):
+                        d = sample_values_from_choices(var_exp[i].choice(), rng=rng, memo=memo)
+                        s.extend(d) 
+            else:
+                if isinstance(var_exp[s[-1]], Expression):
+                    d = sample_values_from_choices(var_exp[s[-1]].choice(), rng=rng, memo=memo)
+                    s.extend(d)
+
     return s
 
 
