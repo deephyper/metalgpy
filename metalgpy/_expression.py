@@ -170,15 +170,15 @@ class Expression:
     def evaluate(self):
         """Evaluate the value of the current expression."""
         raise NotImplementedError
-    
-    def variables(self): 
+
+    def variables(self):
         memo = {}
 
         def choice_aux(o):
 
             if isinstance(o, Expression):
 
-                if isinstance(o, VarExpression) and not(o.id in memo):
+                if isinstance(o, VarExpression) and not (o.id in memo):
                     memo[o.id] = o
                     memo.update(o.variables())
                 else:
@@ -636,7 +636,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint(low=self._low, high=self._high + 1)
+        self._dist = lambda low, high: scipy.stats.randint(low=low, high=high + 1)
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -652,15 +652,30 @@ class Int(VarExpression):
 
         choice = choice[self.id]
 
-        if self._low > choice or choice > self._high:
-            raise ValueError(
-                f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
-            )
+        if not (
+            isinstance(self._low, VarExpression)
+            or isinstance(self._high, VarExpression)
+        ):
+            if self._low > choice or choice > self._high:
+                raise ValueError(
+                    f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
+                )
         self.value = choice
 
     def _sample(self, size=None, rng=None, memo=None):
 
-        return self._dist.rvs(size=size, random_state=rng)
+        low = (
+            self._low.sample(size=size, rng=rng, memo=memo)
+            if isinstance(self._low, VarExpression)
+            else self._low
+        )
+        high = (
+            self._high.sample(size=size, rng=rng, memo=memo)
+            if isinstance(self._high, VarExpression)
+            else self._high
+        )
+
+        return self._dist(low, high).rvs(size=size, random_state=rng)
 
 
 class Float(VarExpression):
@@ -675,7 +690,7 @@ class Float(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.uniform(loc=self._low, scale=self._high - self._low)
+        self._dist = lambda low, high: scipy.stats.uniform(loc=low, scale=high - low)
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -690,12 +705,28 @@ class Float(VarExpression):
     def freeze(self, choice):
 
         choice = choice[self.id]
-        if self._low > choice or choice > self._high:
-            raise ValueError(
-                f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
-            )
+
+        if not (
+            isinstance(self._low, VarExpression)
+            or isinstance(self._high, VarExpression)
+        ):
+            if self._low > choice or choice > self._high:
+                raise ValueError(
+                    f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
+                )
         self.value = choice
 
     def _sample(self, size=None, rng=None, memo=None):
 
-        return self._dist.rvs(size=size, random_state=rng)
+        low = (
+            self._low.sample(size=size, rng=rng, memo=memo)
+            if isinstance(self._low, VarExpression)
+            else self._low
+        )
+        high = (
+            self._high.sample(size=size, rng=rng, memo=memo)
+            if isinstance(self._high, VarExpression)
+            else self._high
+        )
+
+        return self._dist(low, high).rvs(size=size, random_state=rng)

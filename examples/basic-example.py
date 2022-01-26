@@ -13,7 +13,7 @@ program = f(mpy.List([0,1,2,3,4]))
 print("Program: ", program, end="\n\n")
 
 # the choice method returns the variable symbols of the symbolized program
-choices = program.choice()
+choices = program.choices()
 print("Variable Space: ", choices)
 
 # mpy.sample(n, program) generates clones of the symbolized program
