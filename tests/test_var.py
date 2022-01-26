@@ -30,6 +30,10 @@ class TestVar(unittest.TestCase):
         idx = v.sample(size=2, rng=rng)
         assert all(x1 == x2 for x1, x2 in zip(idx, [0, 2]))
 
+        x1 = mpy.List([0, 1, 2])
+        x2 = mpy.List([0, 1, 2])
+        assert x1 == x2
+
     def test_Int(self):
 
         rng = np.random.RandomState(42)
@@ -43,17 +47,16 @@ class TestVar(unittest.TestCase):
         assert len(x) == 2
         assert all(x1 == x2 for x1, x2 in zip(x, [3, 10]))
 
-    # def test_Combination(self):
+    def test_Float(self):
 
-    #     rng = np.random.RandomState(42)
-
-    #     v = mpy.Combination(3, [i for i in range(10)])
-
-    #     x = v.sample(rng=rng)
-    #     assert all(x1 == x2 for x1, x2 in zip(x, [8, 1, 5]))
-
-    #     x = v.sample(size=2, rng=rng)
-    #     assert len(x) == 2
-    #     assert all(x1 == x2 for x1, x2 in zip(x[0], [0, 1, 8]))
-    #     assert all(x1 == x2 for x1, x2 in zip(x[1], [9, 2, 0]))
+        rng = np.random.RandomState(42)
+        
+        v = mpy.Float(0, 10)
+        
+        x = v.sample(rng=rng)
+        assert x == 3.745401188473625
+        
+        x = v.sample(size=2, rng=rng)
+        assert len(x) == 2
+        assert all(x1 == x2 for x1, x2 in zip(x, [9.50714306409916, 7.319939418114051]))
 

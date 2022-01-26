@@ -3,7 +3,7 @@ import numpy as np
 from ._expression import List, Expression
 
 
-def sample_values_from_choices(choices: list, rng, memo=None) -> dict:
+def sample_from_choices(choices: dict, rng, memo=None) -> dict:
     """Sample variables from a list of variable choice.
 
     Args:
@@ -13,36 +13,33 @@ def sample_values_from_choices(choices: list, rng, memo=None) -> dict:
     Returns:
         dict: keys are variable ids, values are variables values.
     """
-    s = []  # var samples
     memo = memo if memo else {}  # memoization
 
-    for var_exp in choices:
+    for var_id, var_exp in choices.items():
 
-        s.append(var_exp.sample(rng=rng, memo=memo))
+        var_exp.sample(rng=rng, memo=memo)
 
         if isinstance(var_exp, List):
-            if isinstance(s[-1], list):
-                for i in s[-1]:
-                    if isinstance(var_exp[i], Expression):
-                        d = sample_values_from_choices(var_exp[i].choice(), rng=rng, memo=memo)
-                        s.extend(d) 
+            if isinstance(memo[var_id], list):
+                for i in memo[var_id]:
+                    if isinstance(var_exp._getitem(i), Expression):
+                        sample_from_choices(var_exp._getitem(i).choices(), rng=rng, memo=memo)
             else:
-                if isinstance(var_exp[s[-1]], Expression):
-                    d = sample_values_from_choices(var_exp[s[-1]].choice(), rng=rng, memo=memo)
-                    s.extend(d)
+                if isinstance(var_exp._getitem(memo[var_id]), Expression):
+                    sample_from_choices(var_exp._getitem(memo[var_id]).choices(), rng=rng, memo=memo)
 
-    return s
+    return memo
 
 
-def sample_values(exp, size=1, rng=None):
+def sample_choice(exp, size=1, rng=None):
 
     if rng is None:
         rng = np.random.RandomState()
 
-    choices = exp.choice()
+    choices = exp.choices()
     for _ in range(size):
 
-        variable_choice = sample_values_from_choices(choices, rng)
+        variable_choice = sample_from_choices(choices, rng)
         yield variable_choice
 
 
@@ -51,7 +48,7 @@ def sample(exp, size, rng=None, deepcopy=False):
     if rng is None:
         rng = np.random.RandomState()
 
-    for variable_choice in sample_values(exp, size, rng):
+    for variable_choice in sample_choice(exp, size, rng):
         exp_clone = exp.clone(deep=deepcopy)
         exp_clone.freeze(variable_choice)
 

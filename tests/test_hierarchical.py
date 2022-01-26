@@ -25,10 +25,15 @@ def h(x):
 
 
 class TestHierarchical(unittest.TestCase):
+
+    def setUp(self):
+        # initialization for test 
+        mpy.VarExpression.var_id = 0 
+
     def test_1(self):
 
         program = h(mpy.List([f, g])(1))
-        choices = program.choice()
+        choices = program.choices()
         assert len(choices) == 1
         assert choices[0] == mpy.List([f,g])
         program.freeze([0])
@@ -37,17 +42,16 @@ class TestHierarchical(unittest.TestCase):
 
     def test_2(self):
         program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
-        choices = program.choice()
+        choices = program.choices()
         assert len(choices) == 1
-        program.freeze([0,2])
+        program.freeze({2:0, 0:2})
         res = program.evaluate()
         assert res == 6
 
     def test_3(self):
         rng = np.random.RandomState(42)
-        mpy.VarExpression.var_id = 0
         program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
-        choices = program.choice()
-        d = mpy.sample_values_from_choices(choices, rng)
+        choices = program.choices()
+        d = mpy.sample_from_choices(choices, rng)
         print(d)
-        assert d == [0, 0]
+        assert d == {2: 0, 0: 0}

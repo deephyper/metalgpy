@@ -28,6 +28,11 @@ def f_generator(c):
 
 
 class TestFunctional(unittest.TestCase):
+
+    def setUp(self):
+        # initialization for test 
+        mpy.VarExpression.var_id = 0 
+
     def test_function(self):
 
         # f is a meta, evaluation should return the original function
@@ -36,21 +41,21 @@ class TestFunctional(unittest.TestCase):
         # test a program applying 1+x
         program = f(0)
         assert type(program) is mpy.FunctionCallExpression
-        assert program.choice() == []
-        program.freeze([])
+        assert program.choices() == {}
+        program.freeze({})
         res = program.evaluate()
         assert res == 1
 
         # test a program with a List variable
         program = f(mpy.List([0, 1, 2]))
-        choices = program.choice()
+        choices = program.choices()
         assert len(choices) == 1
         assert choices[0] == mpy.List([0, 1, 2])
 
         rng = np.random.RandomState(42)
 
-        choice = [v.sample(rng=rng) for v in choices]
-        assert choice == [2]
+        choice = {k:v.sample(rng=rng) for k, v in choices.items()}
+        assert choice == {0:2}
         program.freeze(choice)
         res = program.evaluate()
         assert res == 3
@@ -60,11 +65,11 @@ class TestFunctional(unittest.TestCase):
         rng = np.random.RandomState(42)
 
         program = f(g(0) + mpy.List([1, 2]))
-        choices = program.choice()
+        choices = program.choices()
         assert len(choices) == 1
         assert choices[0] == mpy.List([1, 2])
-        choice = [v.sample(rng=rng) for v in program.choice()]
-        assert choice == [0]
+        choice = {k:v.sample(rng=rng) for k,v in choices.items()}
+        assert choice == {0:0}
         program.freeze(choice)
         res = program.evaluate()
         assert res == 1
@@ -74,11 +79,11 @@ class TestFunctional(unittest.TestCase):
         rng = np.random.RandomState(42)
 
         program = f_generator(mpy.List([0, 1, 2]))(1) + 1
-        choices = program.choice()
+        choices = program.choices()
         assert len(choices) == 1
         assert choices[0] == mpy.List([0, 1, 2])
-        choice = [v.sample(rng=rng) for v in program.choice()]
-        assert choice == [2]
+        choice = {k:v.sample(rng=rng) for k,v in choices.items()}
+        assert choice == {0:2}
         program.freeze(choice)
         res = program.evaluate()
         assert res == 4

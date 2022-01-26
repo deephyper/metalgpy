@@ -2,7 +2,6 @@ import abc
 import collections
 import copy
 import inspect
-from random import choice
 
 import numpy as np
 import scipy.stats
@@ -126,39 +125,31 @@ class Expression:
     def __call__(self, *args, **kwargs):
         return ExpressionCallExpression(self, *args, **kwargs)
 
-    def choice(self):
-        choices = []
+    def choices(self):
+        memo = {}
 
         def choice_aux(o):
 
             if isinstance(o, Expression):
 
                 if isinstance(o, VarExpression):
-                    choices.append(o)
+                    memo[o.id] = o
                 else:
-                    choices.append(o.choice())
+                    memo.update(o.choices())
 
-            return choices
+            return memo
 
         tree.map_structure(choice_aux, self.__dict__)
 
-        choices = tree.flatten(choices)
+        return memo
 
-        return choices
-
-    def freeze(self, choice):
-
-        Q = (
-            choice
-            if isinstance(choice, collections.deque)
-            else collections.deque(choice)
-        )
+    def freeze(self, choice: dict):
 
         # propagate the materialization
         def freeze_aux(o):
 
             if isinstance(o, Expression):
-                o.freeze(Q)
+                o.freeze(choice)
 
         tree.map_structure(freeze_aux, self.__dict__)
 
@@ -179,6 +170,25 @@ class Expression:
     def evaluate(self):
         """Evaluate the value of the current expression."""
         raise NotImplementedError
+    
+    def variables(self): 
+        memo = {}
+
+        def choice_aux(o):
+
+            if isinstance(o, Expression):
+
+                if isinstance(o, VarExpression) and not(o.id in memo):
+                    memo[o.id] = o
+                    memo.update(o.variables())
+                else:
+                    memo.update(o.variables())
+
+            return memo
+
+        tree.map_structure(choice_aux, self.__dict__)
+
+        return memo
 
     def __copy__(self):
         cls = self.__class__
@@ -282,8 +292,6 @@ class FunctionCallExpression(Expression):
     def evaluate(self):
 
         res = self._evaluate()
-        # while isinstance(res, Expression):
-        #     res = res.evaluate()
         return res
 
     def _evaluate(self):
@@ -349,41 +357,34 @@ class ExpressionCallExpression(Expression):
 
         return f"{self.expression}({args + kwargs})"
 
-    def choice(self):
-        choices = self.expression.choice()
+    def choices(self):
+        memo = self.expression.choices()
 
         def choice_aux(o):
 
             if isinstance(o, Expression):
 
                 if isinstance(o, VarExpression):
-                    choices.append(o)
+                    memo[o.id] = o
                 else:
-                    choices.append(o.choice())
+                    memo.update(o.choices())
 
-            return choices
+            return memo
 
         tree.map_structure(choice_aux, self.args)
         tree.map_structure(choice_aux, self.kwargs)
 
-        choices = tree.flatten(choices)
+        return memo
 
-        return choices
+    def freeze(self, choice: dict):
 
-    def freeze(self, choice):
-
-        Q = (
-            choice
-            if isinstance(choice, collections.deque)
-            else collections.deque(choice)
-        )
-        self.expression.freeze(Q)
+        self.expression.freeze(choice)
 
         # propagate the materialization
         def freeze_aux(o):
 
             if isinstance(o, Expression):
-                o.freeze(Q)
+                o.freeze(choice)
 
         tree.map_structure(freeze_aux, self.args)
         tree.map_structure(freeze_aux, self.kwargs)
@@ -439,7 +440,7 @@ class VarExpression(Expression):
     value = None
     var_id = 0
 
-    def __init__(self, name: str=None) -> None:
+    def __init__(self, name: str = None) -> None:
         super().__init__()
         self._name = name
         self.var_id = VarExpression.var_id
@@ -455,13 +456,13 @@ class VarExpression(Expression):
 
         # memoization in case the same VarExpression is used at different places
         if isinstance(memo, dict) and id(self) in memo:
-            return memo[id(self)]
+            return memo[self.id]
 
         s = self._sample(size=size, rng=rng, memo=memo)
 
         if isinstance(memo, dict):
-            memo[id(self)] = s
-        
+            memo[self.id] = s
+
         return s
 
     @abc.abstractmethod
@@ -475,17 +476,21 @@ class VarExpression(Expression):
         else:
             return self.var_id
 
-    def freeze(self, choice):
-        self.value = choice.popleft()
+    def freeze(self, choice: dict):
+        self.value = choice[self.id]
 
     def evaluate(self):
         if isinstance(self.value, Expression):
             return self.value.evaluate()
+        elif tree.is_nested(self.value):
+            return tree.map_structure(
+                lambda x: x.evaluate() if isinstance(x, Expression) else x, self.value
+            )
         else:
             return self.value
 
-    def choice(self):
-        return [self]
+    def choices(self):
+        return {self.id: self}
 
 
 class List(VarExpression):
@@ -501,7 +506,7 @@ class List(VarExpression):
     def __init__(self, values, k=None, replace=False, invariant=False, name=None):
 
         super().__init__(name=name)
-        self._array = list(values)
+        self._values = list(values)
         self._k = k
         self._replace = replace
         self._invariant = invariant
@@ -510,7 +515,7 @@ class List(VarExpression):
         if not (self.value is None):
             return self.value.__repr__()
         else:
-            str_ = str(self._array)
+            str_ = str(self._values)
             if self._k:
                 str_ += f", k={self._k}"
             if self._replace:
@@ -519,37 +524,30 @@ class List(VarExpression):
                 str_ += f", invariant={self._invariant}"
             return f"List(id={self.id}, {str_})"
 
-    def __getitem__(self, item):
+    def _getitem(self, item):
         if isinstance(item, int):
-            return self._array[item]
+            return self._values[item]
         elif isinstance(item, collections.abc.Iterable):
-            return [self._array[i] for i in item]
+            return [self._values[i] for i in item]
         else:
             raise ValueError("index of List should be int or iterable!")
 
-    def __len__(self):
-        return len(self._array)
+    def _length(self):
+        return len(self._values)
 
     def __eq__(self, other):
         b = super().__eq__(other)
         return (
             b
-            and self._array == other._array
+            and self._values == other._values
             and self._k == other._k
             and self._replace == other._replace
         )
 
-    def freeze(self, choice):
+    def freeze(self, choice: dict):
 
-        # convert to queue if not already done
-        choice = (
-            choice
-            if isinstance(choice, collections.deque)
-            else collections.deque(choice)
-        )
-
-        idx = choice.popleft()
-        self.value = self[idx]
+        idx = choice[self.id]
+        self.value = self._getitem(idx)
 
         if isinstance(idx, collections.abc.Iterable):
             for i in idx:
@@ -560,7 +558,7 @@ class List(VarExpression):
                 self.value.freeze(choice)
 
     def _sample(self, size=None, rng=None, memo=None):
-        
+
         # A list is returned for each sample
         if self._k is not None:
 
@@ -579,22 +577,39 @@ class List(VarExpression):
                     idx = np.array(
                         [
                             rng.choice(
-                                len(self), size=sample_size[i], replace=self._replace
+                                self._length(),
+                                size=sample_size[i],
+                                replace=self._replace,
                             )
                             for i in range(size)
                         ]
                     )
                 else:
-                    idx = rng.choice(len(self), size=sample_size, replace=self._replace).tolist()
+                    idx = rng.choice(
+                        self._length(), size=sample_size, replace=self._replace
+                    ).tolist()
 
         else:
 
-            if self._invariant: # permutation invariant
-                idx = 0  
+            if self._invariant:  # permutation invariant
+                idx = 0
             else:
-                idx = rng.choice(len(self), size=size)
+                idx = rng.choice(self._length(), size=size)
 
         return idx
+
+    def child_choices(self):
+        memo = {}
+
+        if isinstance(self._k, Expression):
+            memo[self._k.id] = self._k.choices()
+
+        for i in range(len(self)):
+            value_i = self._getitem(i)
+            if isinstance(value_i, Expression):
+                memo[value_i.id] = value_i.choices()
+
+        return memo
 
     def sub_choice(self):
 
@@ -603,8 +618,8 @@ class List(VarExpression):
             choices.extend(self._k.choice())
 
         for i in range(len(self)):
-            if isinstance(self[i], Expression):
-                choices.extend(self[i].choice())
+            if isinstance(self._getitem(i), Expression):
+                choices.extend(self._getitem(i).choice())
 
         return choices
 
@@ -617,10 +632,10 @@ class Int(VarExpression):
         high (int): the upper bound of the variable discrete interval.
     """
 
-    def __init__(self, low: int, high: int, name: str=None):
+    def __init__(self, low: int, high: int, name: str = None):
         super().__init__(name=name)
-        self._low = low 
-        self._high = high 
+        self._low = low
+        self._high = high
         self._dist = scipy.stats.randint(low=self._low, high=self._high + 1)
 
     def __repr__(self) -> str:
@@ -633,16 +648,10 @@ class Int(VarExpression):
         b = super().__eq__(other)
         return b and self._high == other._upper and self._low == other._lower
 
-    def freeze(self, choice):
+    def freeze(self, choice: dict):
 
-        # convert to queue if not already done
-        choice = (
-            choice
-            if isinstance(choice, collections.deque)
-            else collections.deque(choice)
-        )
+        choice = choice[self.id]
 
-        choice = choice.popleft()
         if self._low > choice or choice > self._high:
             raise ValueError(
                 f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
@@ -662,13 +671,11 @@ class Float(VarExpression):
         high (float): the upper bound of the variable continuous interval.
     """
 
-    def __init__(self, low: float, high: float, name: str=None):
+    def __init__(self, low: float, high: float, name: str = None):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.uniform(
-            loc=self._low, scale=self._high - self._low
-        )
+        self._dist = scipy.stats.uniform(loc=self._low, scale=self._high - self._low)
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -682,14 +689,7 @@ class Float(VarExpression):
 
     def freeze(self, choice):
 
-        # convert to queue if not already done
-        choice = (
-            choice
-            if isinstance(choice, collections.deque)
-            else collections.deque(choice)
-        )
-
-        choice = choice.popleft()
+        choice = choice[self.id]
         if self._low > choice or choice > self._high:
             raise ValueError(
                 f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
