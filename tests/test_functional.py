@@ -50,12 +50,12 @@ class TestFunctional(unittest.TestCase):
         program = f(mpy.List([0, 1, 2]))
         choices = program.choices()
         assert len(choices) == 1
-        assert choices[0] == mpy.List([0, 1, 2])
+        assert choices["0"] == mpy.List([0, 1, 2])
 
         rng = np.random.RandomState(42)
 
         choice = {k:v.sample(rng=rng) for k, v in choices.items()}
-        assert choice == {0:2}
+        assert choice == {"0":2}
         program.freeze(choice)
         res = program.evaluate()
         assert res == 3
@@ -67,9 +67,9 @@ class TestFunctional(unittest.TestCase):
         program = f(g(0) + mpy.List([1, 2]))
         choices = program.choices()
         assert len(choices) == 1
-        assert choices[0] == mpy.List([1, 2])
+        assert choices["0"] == mpy.List([1, 2])
         choice = {k:v.sample(rng=rng) for k,v in choices.items()}
-        assert choice == {0:0}
+        assert choice == {"0":0}
         program.freeze(choice)
         res = program.evaluate()
         assert res == 1
@@ -81,9 +81,9 @@ class TestFunctional(unittest.TestCase):
         program = f_generator(mpy.List([0, 1, 2]))(1) + 1
         choices = program.choices()
         assert len(choices) == 1
-        assert choices[0] == mpy.List([0, 1, 2])
+        assert choices["0"] == mpy.List([0, 1, 2])
         choice = {k:v.sample(rng=rng) for k,v in choices.items()}
-        assert choice == {0:2}
+        assert choice == {"0":2}
         program.freeze(choice)
         res = program.evaluate()
         assert res == 4

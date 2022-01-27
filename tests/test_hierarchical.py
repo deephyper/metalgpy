@@ -35,8 +35,8 @@ class TestHierarchical(unittest.TestCase):
         program = h(mpy.List([f, g])(1))
         choices = program.choices()
         assert len(choices) == 1
-        assert choices[0] == mpy.List([f,g])
-        program.freeze([0])
+        assert choices["0"] == mpy.List([f,g])
+        program.freeze({"0": 0})
         res = program.evaluate()
         assert res == 2
 
@@ -44,7 +44,7 @@ class TestHierarchical(unittest.TestCase):
         program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
         choices = program.choices()
         assert len(choices) == 1
-        program.freeze({2:0, 0:2})
+        program.freeze({"2":0, "0":2})
         res = program.evaluate()
         assert res == 6
 
@@ -54,4 +54,4 @@ class TestHierarchical(unittest.TestCase):
         choices = program.choices()
         d = mpy.sample_from_choices(choices, rng)
         print(d)
-        assert d == {2: 0, 0: 0}
+        assert d == {"2": 0, "0": 0}

@@ -34,14 +34,14 @@ class TestFunctional(unittest.TestCase):
         foo = Foo(mpy.List([1, 2, 3]))
         foo_choices = foo.choices()
         assert len(foo_choices) == 1
-        assert foo_choices[0] == mpy.List([1,2,3])
+        assert foo_choices["0"] == mpy.List([1,2,3])
         y = foo(mpy.List([4, 5, 6]))
         y_choices = y.choices()
         assert len(y_choices) == 2
-        assert y_choices[0] == mpy.List([1,2,3])
-        assert y_choices[2] == mpy.List([4,5,6])
+        assert y_choices["0"] == mpy.List([1,2,3])
+        assert y_choices["2"] == mpy.List([4,5,6])
         choice = {k:v.sample(rng=rng) for k,v in y_choices.items()}
-        assert choice == {0: 2, 2: 0}
+        assert choice == {"0": 2, "2": 0}
         y.freeze(choice)
         res = y.evaluate()
         assert res == -1
@@ -51,8 +51,8 @@ class TestFunctional(unittest.TestCase):
         foo = Foo(mpy.List([1, 2, 3]))
         foo_choices = foo.choices()
         assert len(foo_choices) == 1
-        assert foo_choices[0] == mpy.List([1,2,3])
+        assert foo_choices["0"] == mpy.List([1,2,3])
         a = foo.a
-        a.freeze({0:0})
+        a.freeze({"0":0})
         res = a.evaluate()
         assert res == 1

@@ -70,3 +70,6 @@ class TestInvariant(unittest.TestCase):
                 "conv_3",
                 "output_layer",
             ]
+
+        choice = list(mpy.sample_choice(net, size=2, rng=rng, with_none=True))
+        print(choice)

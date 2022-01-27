@@ -474,7 +474,7 @@ class VarExpression(Expression):
         if self._name:
             return self._name
         else:
-            return self.var_id
+            return str(self.var_id)
 
     def freeze(self, choice: dict):
         self.value = choice[self.id]
@@ -525,12 +525,12 @@ class List(VarExpression):
             return f"List(id={self.id}, {str_})"
 
     def _getitem(self, item):
-        if isinstance(item, int):
+        if np.issubdtype(type(item), np.integer):
             return self._values[item]
         elif isinstance(item, collections.abc.Iterable):
             return [self._values[i] for i in item]
         else:
-            raise ValueError("index of List should be int or iterable!")
+            raise ValueError(f"index of List should be int or iterable but is {item} with type '{type(item)}'!")
 
     def _length(self):
         return len(self._values)
@@ -546,7 +546,35 @@ class List(VarExpression):
 
     def freeze(self, choice: dict):
 
-        idx = choice[self.id]
+        if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
+            idx = choice[self.id]
+
+            # equivalent to constant 0
+            if self._invariant:
+                assert idx == 0
+
+            # equivalent to categorical of len(values)
+            else:
+                assert 0 <= idx and idx < self._length()
+                
+
+        else:  # k >= 1
+
+            # equivalent to constant k so "replace" is ignored
+            if self._invariant:
+                
+                if isinstance(self._k, VarExpression):
+                    # TODO: add assert
+                    idx = [i for i in range(choice[self._k.id])]
+                else:
+                    # TODO: add assert
+                    idx = [i for i in range(choice[self.id])]
+
+            # k Categorical of len(values)
+            else:
+                idx = choice[self.id]
+                assert isinstance(idx, list), "should be a list of 'k' indexes"
+                
         self.value = self._getitem(idx)
 
         if isinstance(idx, collections.abc.Iterable):
@@ -559,42 +587,52 @@ class List(VarExpression):
 
     def _sample(self, size=None, rng=None, memo=None):
 
-        # A list is returned for each sample
-        if self._k is not None:
+        if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
 
-            if isinstance(self._k, VarExpression):
-                sample_size = self._k.sample(size=size, rng=rng, memo=memo)
+            # equivalent to constant 0
+            if self._invariant:
+                idx = np.zeros((size,)) if size else 0
+
+            # equivalent to categorical of len(values)
             else:
-                sample_size = self._k
+                idx = rng.choice(self._length(), size=size)
 
-            if self._invariant:  # permutation invariant
-                if size is not None:
-                    idx = np.array([np.arange(sample_size[i]) for i in range(size)])
+        else:  # k >= 1
+
+            # equivalent to constant k so "replace" is ignored
+            if self._invariant:
+                if isinstance(self._k, VarExpression):
+                    idx = self._k.sample(size, rng, memo)
                 else:
-                    idx = np.arange(sample_size).tolist()
+                    idx = np.full((size,), self._k)
+
+            # k Categorical of len(values)
             else:
-                if size is not None:
-                    idx = np.array(
-                        [
+
+                if isinstance(self._k, VarExpression):
+                    sample_size = self._k.sample(size, rng, memo)
+
+                    if size:  # sample size is an array
+                        idx = [
                             rng.choice(
                                 self._length(),
                                 size=sample_size[i],
                                 replace=self._replace,
-                            )
+                            ).tolist()
                             for i in range(size)
                         ]
-                    )
-                else:
+                    else:  # sample size is a scalar
+                        idx = rng.choice(
+                            self._length(),
+                            size=sample_size,
+                            replace=self._replace,
+                        )
+                else:  # self._k is and int
                     idx = rng.choice(
-                        self._length(), size=sample_size, replace=self._replace
-                    ).tolist()
-
-        else:
-
-            if self._invariant:  # permutation invariant
-                idx = 0
-            else:
-                idx = rng.choice(self._length(), size=size)
+                        self._length(),
+                        size=self._k,
+                        replace=self._replace,
+                    )
 
         return idx
 
@@ -611,17 +649,17 @@ class List(VarExpression):
 
         return memo
 
-    def sub_choice(self):
+    # def sub_choice(self):
 
-        choices = []
-        if isinstance(self._k, Expression):
-            choices.extend(self._k.choice())
+    #     choices = []
+    #     if isinstance(self._k, Expression):
+    #         choices.extend(self._k.choice())
 
-        for i in range(len(self)):
-            if isinstance(self._getitem(i), Expression):
-                choices.extend(self._getitem(i).choice())
+    #     for i in range(len(self)):
+    #         if isinstance(self._getitem(i), Expression):
+    #             choices.extend(self._getitem(i).choice())
 
-        return choices
+    #     return choices
 
 
 class Int(VarExpression):
@@ -636,7 +674,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = lambda low, high: scipy.stats.randint(low=low, high=high + 1)
+        self._dist = scipy.stats.randint
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -675,8 +713,7 @@ class Int(VarExpression):
             else self._high
         )
 
-        return self._dist(low, high).rvs(size=size, random_state=rng)
-
+        return self._dist.rvs(low, high+1, size=size, random_state=rng)
 
 class Float(VarExpression):
     """Defines a continuous variable.
@@ -690,7 +727,7 @@ class Float(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = lambda low, high: scipy.stats.uniform(loc=low, scale=high - low)
+        self._dist = scipy.stats.uniform
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -729,4 +766,5 @@ class Float(VarExpression):
             else self._high
         )
 
-        return self._dist(low, high).rvs(size=size, random_state=rng)
+        return self._dist.rvs(loc=low, scale=high - low, size=size, random_state=rng)
+
