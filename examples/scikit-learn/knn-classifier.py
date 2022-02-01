@@ -24,9 +24,9 @@ score = clf.score(X_test, y_test) # outputs 0.925
 # * MetalgPy
 import metalgpy as mpy
 
-clf = mpy.meta(KNeighborsClassifier)(mpy.Int(3,5))
+clf = mpy.meta(KNeighborsClassifier)(mpy.Int(3,5, name="n_neighbors"))
 clf = clf.fit(X_train, y_train)
 score = clf.score(X_test, y_test)
 
-score.freeze([3]) # we choose "clf = KNeighborsClassifier(3)"
+score.freeze({"n_neighbors": 3}) # we choose "clf = KNeighborsClassifier(3)"
 score = score.evaluate() # outputs 0.925
