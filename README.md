@@ -2,6 +2,8 @@
 
 What if we could write a program that generates programs? Inspired by Automated Machine Learning research such as [PyGlove](https://proceedings.neurips.cc/paper/2020/file/012a91467f210472fab4e11359bbfef6-Paper.pdf).
 
+> :warning: **Experimental**: Contributions are welcome!
+
 ## Install
 
 ```console
