@@ -674,7 +674,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint
+        self._dist = scipy.stats.randint # Default Distribution
 
     def __repr__(self) -> str:
         if not (self.value is None):

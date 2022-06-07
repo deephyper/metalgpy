@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 REQUIRED = [
     "dm-tree",
     "numpy",
-    "scipy"
+    "scipy",
 ]
 
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-from ._expression import Expression, List, VarExpression
+from ._expression import Expression, List, VarExpression, ObjectExpression
 
 
 LIST_CONSTANT = -1
@@ -35,8 +35,14 @@ def list_type(list_exp):
 
             return LIST_KCATEGORICAL
 
+class BaseSampler:
+    def __init__(self, exp, distributions: List[tuple]=None, rng:np.random.RandomState=None):
+        self.exp = exp
+        self.distributions = distributions
+        self.rng = rng
+        
 
-class Sampler:
+class SamplerOld:
     def __init__(self, exp) -> None:
         self.exp = exp
         self.variables = self.exp.variables()
@@ -128,6 +134,9 @@ def sample(exp, size, rng=None, deepcopy=False):
 
     if rng is None:
         rng = np.random.RandomState()
+
+    if not(isinstance(exp, Expression)):
+        exp = ObjectExpression(exp)
 
     for variable_choice in sample_choice(exp, size, rng):
         exp_clone = exp.clone(deep=deepcopy)

@@ -30,3 +30,5 @@ score = clf.score(X_test, y_test)
 
 score.freeze({"n_neighbors": 3}) # we choose "clf = KNeighborsClassifier(3)"
 score = score.evaluate() # outputs 0.925
+
+print("score: ", score)
