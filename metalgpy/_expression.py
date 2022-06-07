@@ -256,7 +256,8 @@ class UnaryExpression(Expression):
     def evaluate(self):
         self.evaluate_children()
 
-        operator_implementation = getattr(self.x, UNA_OPS_SYNTAX_2_ATTR[self.operator])
+        operator_implementation = getattr(
+            self.x, UNA_OPS_SYNTAX_2_ATTR[self.operator])
 
         return operator_implementation()
 
@@ -495,26 +496,54 @@ class VarExpression(Expression):
 
 class List(VarExpression):
     """Represent a categorical choice.
-
-    Args:
-        values (iterable): an interable with possible values.
-        k (int, optional): the number of values selected in values. Defaults to None.
-        replace (bool, optional): draw from values with replacement. Defaults to False.
-        invariant (bool, optional): values is permutation invariant (e.g., a list of same object types). Defaults to True.
+    ----------
+    Parameters
+    ----------
+    arg1 | values: iterable
+        an interable with possible values.
+    arg2 | ordered: int [OPTIONAL]
+        a flag to specify the type of categorical variable (nominal vs ordinal). Defaults to False.
+    arg3 | k: int [OPTIONAL]
+        the number of values selected in values. Defaults to None.
+    arg4 | replace: int [OPTIONAL]
+        draw from values with replacement. Defaults to False.
+    arg5 | invariant: int [OPTIONAL]
+        a flag to specify if values are supposably permutation invariant (e.g., a list of same object types). Defaults to True.
+    arg6 | name: str [OPTIONAL]
+        Name of the potential variable to be stored in the configuration space. Defaults to None
+    Returns
+    -------
+    Variable Expression
+        mpy.List
     """
 
-    def __init__(self, values, k=None, replace=False, invariant=False, name=None):
-
+    def __init__(self,
+                 values,
+                 ordered=False,
+                 k=None,
+                 replace=False,
+                 invariant=False,
+                 name=None):
+        """Build the List type Variable expression"""
         super().__init__(name=name)
         self._values = list(values)
         self._k = k
         self._replace = replace
         self._invariant = invariant
+        self._ordered = ordered
 
+    # add dunder method to update string representation of the object
     def __repr__(self) -> str:
+        """
+        cat_ordinal = mpy.List(values=["low", "medium", "high"], ordered=True, name="cat_ordinal")
+        print(cat_ordinal)
+            List(id=cat_nominal, ['low', 'medium', 'high'])
+        """
+        # return empty string notation if there aren't any values
         if not (self.value is None):
             return self.value.__repr__()
         else:
+            # showcase the items in the list
             str_ = str(self._values)
             if self._k:
                 str_ += f", k={self._k}"
@@ -522,19 +551,31 @@ class List(VarExpression):
                 str_ += f", replace={self._replace}"
             if self._invariant:
                 str_ += f", invariant={self._invariant}"
+            if self._ordered:
+                str_ += f", ordered={self._ordered}"
             return f"List(id={self.id}, {str_})"
 
+    # mangle the item getter to the class object
     def _getitem(self, item):
+        # check if the values specified in the expression are integers
         if np.issubdtype(type(item), np.integer):
             return self._values[item]
+
+        # for any other type of iterate, simply iterate over the possible list of choices
         elif isinstance(item, collections.abc.Iterable):
             return [self._values[i] for i in item]
-        else:
-            raise ValueError(f"index of List should be int or iterable but is {item} with type '{type(item)}'!")
 
+        # raise an exception if a non-iterable index is present in the list of passed values
+        else:
+            raise ValueError(
+                f"index of List should be int or iterable but is {item} with type '{type(item)}'!")
+
+    # mangle the length method to the class object
     def _length(self):
+        # return length of given Variable expression
         return len(self._values)
 
+    # add dunder method to check operator equality
     def __eq__(self, other):
         b = super().__eq__(other)
         return (
@@ -542,11 +583,12 @@ class List(VarExpression):
             and self._values == other._values
             and self._k == other._k
             and self._replace == other._replace
+            and self._ordered == other._ordered
         )
 
     def freeze(self, choice: dict):
-
-        if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
+        # "replace" is ignored (only 1 sample is drawn)
+        if self._k is None:
             idx = choice[self.id]
 
             # equivalent to constant 0
@@ -556,27 +598,39 @@ class List(VarExpression):
             # equivalent to categorical of len(values)
             else:
                 assert 0 <= idx and idx < self._length()
-                
 
-        else:  # k >= 1
+        # k >= 1
+        else:
 
             # equivalent to constant k so "replace" is ignored
             if self._invariant:
-                
+
                 if isinstance(self._k, VarExpression):
-                    # TODO: add assert
+                    # obtain indexes for the Variable expression
                     idx = [i for i in range(choice[self._k.id])]
+
+                    # check if the evaluated expression is a list
+                    assert isinstance(
+                        idx, list), "Should be a list of 'k' indexes"
                 else:
-                    # TODO: add assert
+                    # obtain indexes
                     idx = [i for i in range(choice[self.id])]
+
+                    # check if the evaluated expression is a list
+                    assert isinstance(
+                        idx, list), "Should be a list of 'k' indexes"
 
             # k Categorical of len(values)
             else:
                 idx = choice[self.id]
-                assert isinstance(idx, list), "should be a list of 'k' indexes"
-                
+
+                # check if the evaluated expression is a list
+                assert isinstance(idx, list), "Should be a list of 'k' indexes"
+
+        # use the mangled method to obtain value of a single item
         self.value = self._getitem(idx)
 
+        # freeze the list of choices
         if isinstance(idx, collections.abc.Iterable):
             for i in idx:
                 if isinstance(self.value[i], Expression):
@@ -674,7 +728,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint # Default Distribution
+        self._dist = scipy.stats.randint  # Default Distribution
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -714,6 +768,7 @@ class Int(VarExpression):
         )
 
         return self._dist.rvs(low, high+1, size=size, random_state=rng)
+
 
 class Float(VarExpression):
     """Defines a continuous variable.
@@ -767,4 +822,3 @@ class Float(VarExpression):
         )
 
         return self._dist.rvs(loc=low, scale=high - low, size=size, random_state=rng)
-
