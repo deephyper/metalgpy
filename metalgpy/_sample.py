@@ -36,11 +36,11 @@ def list_type(list_exp):
             return LIST_KCATEGORICAL
 
 class BaseSampler:
-    def __init__(self, exp, distributions: List[tuple]=None, rng:np.random.RandomState=None):
+    def __init__(self, exp, distributions: dict=None, rng:np.random.RandomState=None):
         self.exp = exp
         self.distributions = distributions
         self.rng = rng
-        
+
 
 class SamplerOld:
     def __init__(self, exp) -> None:
