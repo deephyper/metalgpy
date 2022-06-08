@@ -496,66 +496,30 @@ class VarExpression(Expression):
 
 class List(VarExpression):
     """Represent a categorical choice.
-    ----------
-    Parameters
-    ----------
-    arg1 | values: iterable
-        an interable with possible values.
-    arg2 | ordered: int [OPTIONAL]
-        a flag to specify the type of categorical variable (nominal vs ordinal). Defaults to False.
-    arg3 | k: int [OPTIONAL]
-        the number of values selected in values. Defaults to None.
-    arg4 | replace: int [OPTIONAL]
-        draw from values with replacement. Defaults to False.
-    arg5 | invariant: int [OPTIONAL]
-        a flag to specify if values are supposably permutation invariant (e.g., a list of same object types). Defaults to True.
-    arg6 | name: str [OPTIONAL]
-        Name of the potential variable to be stored in the configuration space. Defaults to None
-    Returns
-    -------
-    Variable Expression
-        mpy.List
+    Args:
+        values (iterable): an interable with possible values.
+        ordered (bool, optional): a flag to specify the type of categorical variable (nominal vs ordinal). Defaults to False.
+        name (str, optional): name of the potential variable to be stored in the configuration space. Defaults to None.
     """
-
     def __init__(self,
                  values,
                  ordered=False,
-                 k=None,
-                 replace=False,
-                 invariant=False,
                  name=None):
-        """Build the List type Variable expression"""
         super().__init__(name=name)
         self._values = list(values)
-        self._k = k
-        self._replace = replace
-        self._invariant = invariant
         self._ordered = ordered
 
-    # add dunder method to update string representation of the object
     def __repr__(self) -> str:
-        """
-        cat_ordinal = mpy.List(values=["low", "medium", "high"], ordered=True, name="cat_ordinal")
-        print(cat_ordinal)
-            List(id=cat_nominal, ['low', 'medium', 'high'])
-        """
         # return empty string notation if there aren't any values
         if not (self.value is None):
             return self.value.__repr__()
         else:
             # showcase the items in the list
             str_ = str(self._values)
-            if self._k:
-                str_ += f", k={self._k}"
-            if self._replace:
-                str_ += f", replace={self._replace}"
-            if self._invariant:
-                str_ += f", invariant={self._invariant}"
             if self._ordered:
                 str_ += f", ordered={self._ordered}"
             return f"List(id={self.id}, {str_})"
 
-    # mangle the item getter to the class object
     def _getitem(self, item):
         # check if the values specified in the expression are integers
         if np.issubdtype(type(item), np.integer):
@@ -570,64 +534,23 @@ class List(VarExpression):
             raise ValueError(
                 f"index of List should be int or iterable but is {item} with type '{type(item)}'!")
 
-    # mangle the length method to the class object
     def _length(self):
         # return length of given Variable expression
         return len(self._values)
 
-    # add dunder method to check operator equality
     def __eq__(self, other):
         b = super().__eq__(other)
         return (
             b
             and self._values == other._values
-            and self._k == other._k
-            and self._replace == other._replace
             and self._ordered == other._ordered
         )
 
     def freeze(self, choice: dict):
-        # "replace" is ignored (only 1 sample is drawn)
-        if self._k is None:
-            idx = choice[self.id]
+        # obtain the index of intended frozen choice
+        idx = choice[self.id]
 
-            # equivalent to constant 0
-            if self._invariant:
-                assert idx == 0
-
-            # equivalent to categorical of len(values)
-            else:
-                assert 0 <= idx and idx < self._length()
-
-        # k >= 1
-        else:
-
-            # equivalent to constant k so "replace" is ignored
-            if self._invariant:
-
-                if isinstance(self._k, VarExpression):
-                    # obtain indexes for the Variable expression
-                    idx = [i for i in range(choice[self._k.id])]
-
-                    # check if the evaluated expression is a list
-                    assert isinstance(
-                        idx, list), "Should be a list of 'k' indexes"
-                else:
-                    # obtain indexes
-                    idx = [i for i in range(choice[self.id])]
-
-                    # check if the evaluated expression is a list
-                    assert isinstance(
-                        idx, list), "Should be a list of 'k' indexes"
-
-            # k Categorical of len(values)
-            else:
-                idx = choice[self.id]
-
-                # check if the evaluated expression is a list
-                assert isinstance(idx, list), "Should be a list of 'k' indexes"
-
-        # use the mangled method to obtain value of a single item
+        # obtain value of a single item
         self.value = self._getitem(idx)
 
         # freeze the list of choices
@@ -639,62 +562,59 @@ class List(VarExpression):
             if isinstance(self.value, Expression):
                 self.value.freeze(choice)
 
-    def _sample(self, size=None, rng=None, memo=None):
+    # def _sample(self, size=None, rng=None, memo=None):
 
-        if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
+    #     if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
 
-            # equivalent to constant 0
-            if self._invariant:
-                idx = np.zeros((size,)) if size else 0
+    #         # equivalent to constant 0
+    #         if self._invariant:
+    #             idx = np.zeros((size,)) if size else 0
 
-            # equivalent to categorical of len(values)
-            else:
-                idx = rng.choice(self._length(), size=size)
+    #         # equivalent to categorical of len(values)
+    #         else:
+    #             idx = rng.choice(self._length(), size=size)
 
-        else:  # k >= 1
+    #     else:  # k >= 1
 
-            # equivalent to constant k so "replace" is ignored
-            if self._invariant:
-                if isinstance(self._k, VarExpression):
-                    idx = self._k.sample(size, rng, memo)
-                else:
-                    idx = np.full((size,), self._k)
+    #         # equivalent to constant k so "replace" is ignored
+    #         if self._invariant:
+    #             if isinstance(self._k, VarExpression):
+    #                 idx = self._k.sample(size, rng, memo)
+    #             else:
+    #                 idx = np.full((size,), self._k)
 
-            # k Categorical of len(values)
-            else:
+    #         # k Categorical of len(values)
+    #         else:
 
-                if isinstance(self._k, VarExpression):
-                    sample_size = self._k.sample(size, rng, memo)
+    #             if isinstance(self._k, VarExpression):
+    #                 sample_size = self._k.sample(size, rng, memo)
 
-                    if size:  # sample size is an array
-                        idx = [
-                            rng.choice(
-                                self._length(),
-                                size=sample_size[i],
-                                replace=self._replace,
-                            ).tolist()
-                            for i in range(size)
-                        ]
-                    else:  # sample size is a scalar
-                        idx = rng.choice(
-                            self._length(),
-                            size=sample_size,
-                            replace=self._replace,
-                        )
-                else:  # self._k is and int
-                    idx = rng.choice(
-                        self._length(),
-                        size=self._k,
-                        replace=self._replace,
-                    )
+    #                 if size:  # sample size is an array
+    #                     idx = [
+    #                         rng.choice(
+    #                             self._length(),
+    #                             size=sample_size[i],
+    #                             replace=self._replace,
+    #                         ).tolist()
+    #                         for i in range(size)
+    #                     ]
+    #                 else:  # sample size is a scalar
+    #                     idx = rng.choice(
+    #                         self._length(),
+    #                         size=sample_size,
+    #                         replace=self._replace,
+    #                     )
+    #             else:  # self._k is and int
+    #                 idx = rng.choice(
+    #                     self._length(),
+    #                     size=self._k,
+    #                     replace=self._replace,
+    #                 )
 
-        return idx
+    #     return idx
 
     def child_choices(self):
         memo = {}
-
-        if isinstance(self._k, Expression):
-            memo[self._k.id] = self._k.choices()
 
         for i in range(len(self)):
             value_i = self._getitem(i)
