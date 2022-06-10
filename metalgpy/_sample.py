@@ -1,6 +1,8 @@
+import collections
 import numpy as np
+import scipy
 
-from ._expression import Expression, List, VarExpression, ObjectExpression
+from ._expression import Expression, List, Int, Float, VarExpression, ObjectExpression
 
 
 LIST_CONSTANT = -1
@@ -36,12 +38,72 @@ def list_type(list_exp):
             return LIST_KCATEGORICAL
 
 class BaseSampler:
-    def __init__(self, exp, distributions: dict=None, rng:np.random.RandomState=None):
+    """Defines a Base Sampler
+    
+    Args:
+        exp (Expression): a metalgpy expression.
+        distributions (dict, optional): preferred distributions for drawing samples. Defaults to None.
+        rng (int, optional): a random seed to generate same stream of values.Defaults to None.
+    """
+    def __init__(self,
+                 exp,
+                 distributions: dict=None,
+                 rng:np.random.RandomState=None):
         self.exp = exp
         self.distributions = distributions
         self.rng = rng
 
+    def sample(self, size=None):
+        # add a list to store samples
+        samples = []
 
+        # init a random state is rng
+        if self.rng is None:
+            rng = np.random.RandomState()
+
+        # check if the size is None
+        if size is None:
+            size = 1
+
+        # gather the list of choices
+        choices = self.exp.choices()
+
+        # check if the distributions are passed
+        if self.distributions is None:
+            self.distributions = {var_id: var_exp._dist for var_id, var_exp in choices.items()}
+
+        # get the required number of samples
+        for _ in range(size):
+            choice = self._sample(choices)
+
+            # store the sample
+            samples.append(choice)
+
+        # return the list in a numpy array
+        return np.array(samples).reshape(len(samples), -1)
+
+    def _sample(self, choices):
+        # init a list to store samples
+        s = []
+
+        for var_id, var_exp in choices.items():
+            # check if the expression is Float
+            if isinstance(var_exp, Float):
+                # add samples
+                s.append(self.distributions[var_id].rvs(loc=var_exp._low, \
+                                           scale=var_exp._high - var_exp._low, \
+                                           size=1, random_state=self.rng))
+
+            # check if the expression is Int
+            if isinstance(var_exp, Int):
+                # add samples
+                s.append(self.distributions[var_id].rvs(low=var_exp._low, \
+                                           high=var_exp._high + 1, \
+                                           size=1, random_state=self.rng))
+
+        # return the samples
+        return s
+        
 class SamplerOld:
     def __init__(self, exp) -> None:
         self.exp = exp
