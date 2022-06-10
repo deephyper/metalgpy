@@ -50,7 +50,7 @@ class BaseSampler:
                  distributions: dict=None,
                  rng:np.random.RandomState=None):
         self.exp = exp
-        self.distributions = distributions
+        self.distributions = self._map_dist(distributions)
         self.rng = rng
         self._cache = {}
 
@@ -68,12 +68,6 @@ class BaseSampler:
 
         # gather the list of choices
         choices = self.exp.choices()
-
-        # check if the distributions are passed
-        if self.distributions is None:
-            self.distributions = {var_id: var_exp._dist if isinstance(var_exp, Int) or \
-                                  isinstance(var_exp, Float) else None \
-                                  for var_id, var_exp in choices.items()}
 
         # get the required number of samples
         for _ in range(size):
@@ -123,7 +117,25 @@ class BaseSampler:
 
         # return the samples
         return s
-        
+
+    def _map_dist(self, distributions):
+        # create an empty dist map
+        dist_map = {}
+
+        # check if the distributions are passed
+        if distributions is None:
+            dist_map = {var_id: var_exp._dist if isinstance(var_exp, Int) or \
+                                  isinstance(var_exp, Float) else None \
+                                  for var_id, var_exp in self.exp.choices().items()}
+        else:
+            # map given distributions
+            for var_id, distribution in distributions:
+                if not isinstance(var_id, list):
+                    dist_map[var_id] = distribution
+
+        # return the mapped distribution dict
+        return dist_map
+ 
 class SamplerOld:
     def __init__(self, exp) -> None:
         self.exp = exp
