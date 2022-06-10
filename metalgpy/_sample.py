@@ -52,14 +52,15 @@ class BaseSampler:
         self.exp = exp
         self.distributions = distributions
         self.rng = rng
+        self._cache = {}
 
-    def sample(self, size=None):
+    def sample(self, size=None, to_nd_array=True):
         # add a list to store samples
         samples = []
 
         # init a random state is rng
         if self.rng is None:
-            rng = np.random.RandomState()
+            self.rng = np.random.RandomState()
 
         # check if the size is None
         if size is None:
@@ -70,7 +71,9 @@ class BaseSampler:
 
         # check if the distributions are passed
         if self.distributions is None:
-            self.distributions = {var_id: var_exp._dist for var_id, var_exp in choices.items()}
+            self.distributions = {var_id: var_exp._dist if isinstance(var_exp, Int) or \
+                                  isinstance(var_exp, Float) else None \
+                                  for var_id, var_exp in choices.items()}
 
         # get the required number of samples
         for _ in range(size):
@@ -79,8 +82,17 @@ class BaseSampler:
             # store the sample
             samples.append(choice)
 
+        # add a try catch block to capture returning elements to an nd-array
+        try:
+            if to_nd_array:
+                # convert the samples to an nd_array
+                samples = np.array(samples).reshape(len(samples), -1)
+        except ValueError:
+            # warn about invalid array structure
+            print("Cannot convert the sample to a numpy array")
+
         # return the list in a numpy array
-        return np.array(samples).reshape(len(samples), -1)
+        return samples
 
     def _sample(self, choices):
         # init a list to store samples
@@ -100,6 +112,14 @@ class BaseSampler:
                 s.append(self.distributions[var_id].rvs(low=var_exp._low, \
                                            high=var_exp._high + 1, \
                                            size=1, random_state=self.rng))
+
+            # check if the expression is List
+            if isinstance(var_exp, List):
+                # get idx of the samples to choice
+                var_exps_idx = self.rng.choice(var_exp._length(), size=1)
+
+                # add samples
+                s.append(var_exp._getitem(var_exps_idx))
 
         # return the samples
         return s
