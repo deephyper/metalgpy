@@ -508,6 +508,7 @@ class List(VarExpression):
         super().__init__(name=name)
         self._values = list(values)
         self._ordered = ordered
+        self._dist = scipy.stats.randint.rvs
 
     def __repr__(self) -> str:
         # return empty string notation if there aren't any values
@@ -597,7 +598,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint  # Default Distribution
+        self._dist = scipy.stats.randint.rvs  # Default Distribution
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -635,7 +636,7 @@ class Float(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.uniform
+        self._dist = scipy.stats.uniform.rvs
 
     def __repr__(self) -> str:
         if not (self.value is None):

@@ -1,6 +1,7 @@
 import collections
 import numpy as np
 import scipy
+import inspect
 
 from ._expression import Expression, List, Int, Float, VarExpression, ObjectExpression
 
@@ -44,6 +45,9 @@ class BaseSampler:
         exp (Expression): a metalgpy expression.
         distributions (dict, optional): preferred distributions for drawing samples. Defaults to None.
         rng (int, optional): a random seed to generate same stream of values.Defaults to None.
+
+    Returns:
+        BaseSampler: a sampler object.
     """
     def __init__(self,
                  exp,
@@ -51,72 +55,93 @@ class BaseSampler:
                  rng:np.random.RandomState=None):
         self.exp = exp
         self.distributions = self._map_dist(distributions)
-        self.rng = rng
-        self._cache = {}
+        self.rng = check_random_state(rng)
+        self._choices = self.exp.choices()
 
-    def sample(self, size=None, to_nd_array=True):
-        # add a list to store samples
-        samples = []
+    def sample(self, size=None, flat=True):
+        # check for sample size
+        if isinstance(size, int) and size > 0:
+            # get the required number of samples
+            samples = [self._sample(self._choices) for _ in range(size)]
 
-        # init a random state is rng
-        if self.rng is None:
-            self.rng = np.random.RandomState()
+            # group the values of the respective variables
+            samples = {var_id: [sample.get(var_id)[0] for sample in samples] \
+                       for var_id in set().union(*samples)}
 
-        # check if the size is None
+            # stack the values
+            samples = {var_id: np.hstack(sample) for var_id, sample in samples.items()}
+
+            # check for flat flag
+            if flat:
+                # obtain just the samples from the dict
+                samples = np.array([sample for sample in samples.values()])
+
+            # return the samples
+            return samples
+
         if size is None:
-            size = 1
+            # obtain a sample
+            sample = self._sample(self._choices)
 
-        # gather the list of choices
-        choices = self.exp.choices()
+            # check for flat flag to see if array/dict is expected
+            if flat:
+                # obtain sample from the dict
+                sample = np.array([s[0] for s in sample.values()])
 
-        # get the required number of samples
-        for _ in range(size):
-            choice = self._sample(choices)
+            # return the sample
+            return sample
 
-            # store the sample
-            samples.append(choice)
-
-        # add a try catch block to capture returning elements to an nd-array
-        try:
-            if to_nd_array:
-                # convert the samples to an nd_array
-                samples = np.array(samples).reshape(len(samples), -1)
-        except ValueError:
-            # warn about invalid array structure
-            print("Cannot convert the sample to a numpy array")
-
-        # return the list in a numpy array
-        return samples
+        # raise value error
+        raise ValueError("The value %r cannot be specified as size, size expects an integer")
 
     def _sample(self, choices):
-        # init a list to store samples
-        s = []
+        # init a dict to store samples
+        self._cache = {}
 
+        # iterate over the possible choices of the expression
         for var_id, var_exp in choices.items():
             # check if the expression is Float
             if isinstance(var_exp, Float):
-                # add samples
-                s.append(self.distributions[var_id].rvs(loc=var_exp._low, \
+                # check for existing key
+                if not var_id in self._cache:
+                    # add samples
+                    self._cache[var_id] = [self.distributions[var_id](loc=var_exp._low, \
+                                           scale=var_exp._high - var_exp._low, \
+                                           size=1, random_state=self.rng)]
+                else:
+                    # update the sample list
+                    self._cache[var_id].append(self.distributions[var_id](loc=var_exp._low, \
                                            scale=var_exp._high - var_exp._low, \
                                            size=1, random_state=self.rng))
 
             # check if the expression is Int
             if isinstance(var_exp, Int):
-                # add samples
-                s.append(self.distributions[var_id].rvs(low=var_exp._low, \
-                                           high=var_exp._high + 1, \
-                                           size=1, random_state=self.rng))
+                # check for existing key
+                if not var_id in self._cache:
+                    # add samples
+                    self._cache[var_id] = [self.distributions[var_id](low=var_exp._low, \
+                                               high=var_exp._high + 1, \
+                                               size=1, random_state=self.rng)]
+                else:
+                    # update the sample list
+                    self._cache[var_id].append(self.distributions[var_id](low=var_exp._low, \
+                                               high=var_exp._high + 1, \
+                                               size=1, random_state=self.rng))
 
             # check if the expression is List
             if isinstance(var_exp, List):
-                # get idx of the samples to choice
-                var_exps_idx = self.rng.choice(var_exp._length(), size=1)
-
-                # add samples
-                s.append(var_exp._getitem(var_exps_idx))
+                # check for existing key
+                if not var_id in self._cache:
+                    # add samples
+                    self._cache[var_id] = [self.distributions[var_id](low=0, high=var_exp._length(), \
+                                                                     size=1, random_state=self.rng)]
+                else:
+                    # update the sample list
+                    self._cache[var_id].append(self.distributions[var_id](low=0, high=var_exp._length(), \
+                                                                     size=1, random_state=self.rng))
 
         # return the samples
-        return s
+        return self._cache
 
     def _map_dist(self, distributions):
         # create an empty dist map
@@ -124,17 +149,28 @@ class BaseSampler:
 
         # check if the distributions are passed
         if distributions is None:
+            # map the default dist map
             dist_map = {var_id: var_exp._dist if isinstance(var_exp, Int) or \
-                                  isinstance(var_exp, Float) else None \
-                                  for var_id, var_exp in self.exp.choices().items()}
-        else:
-            # map given distributions
-            for var_id, distribution in distributions:
-                if not isinstance(var_id, list):
+                                      isinstance(var_exp, Float) or isinstance(var_exp, List) \
+                                      else None for var_id, var_exp in self.exp.choices().items()}
+
+        # check if a distribution dict is passed
+        if isinstance(distributions, dict):
+            for var_id, distribution in distributions.items():
+                # collect respective distribution by key
+                if var_id in self.exp.choices().keys():
                     dist_map[var_id] = distribution
 
-        # return the mapped distribution dict
+                # if the variable is passed in an iterable
+                if isinstance(var_id, collections.abc.Iterable):
+                    for var in var_id:
+                        # check if the variable is valid
+                        if var in self.exp.choices().keys():
+                            dist_map[var] = distribution
+
+        # return the dist map
         return dist_map
+
  
 class SamplerOld:
     def __init__(self, exp) -> None:
@@ -237,3 +273,23 @@ def sample(exp, size, rng=None, deepcopy=False):
         exp_clone.freeze(variable_choice)
 
         yield variable_choice, exp_clone
+
+def check_random_state(rng):
+    """Checks the seed provided to create a RandomState instance
+    
+    Courtesy : https://scikit-learn.org/stable/modules/generated/sklearn.utils.check_random_state.html
+
+    Args:
+        rng (int ? np.random.RandomState): a random state instance or an integer seed.
+
+    Returns:
+        Random State Object (np.random.RandomState)
+    """
+    if rng is None:
+        return np.random.mtrand._rand
+    if isinstance(rng, int):
+        return np.random.RandomState(rng)
+    if isinstance(rng, np.random.RandomState):
+        return rng
+    raise ValueError("The value %r cannot be used for creating a random state instance")
+
