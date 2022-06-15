@@ -54,7 +54,7 @@ class BaseSampler:
                  distributions: dict=None,
                  rng:np.random.RandomState=None):
         self.exp = exp
-        self.distributions = self._map_dist(distributions)
+        self.distributions = distributions
         self.rng = check_random_state(rng)
         self._choices = self.exp.choices()
 
@@ -62,31 +62,24 @@ class BaseSampler:
         # check for sample size
         if isinstance(size, int) and size > 0:
             # get the required number of samples
-            samples = [self._sample(self._choices) for _ in range(size)]
-
-            # group the values of the respective variables
-            samples = {var_id: [sample.get(var_id)[0] for sample in samples] \
-                       for var_id in set().union(*samples)}
-
-            # stack the values
-            samples = {var_id: np.hstack(sample) for var_id, sample in samples.items()}
+            samples = self._sample(self._choices, size)
 
             # check for flat flag
             if flat:
                 # obtain just the samples from the dict
-                samples = np.array([sample for sample in samples.values()])
+                samples = np.array([list(sample.values()) for sample in samples])
 
             # return the samples
             return samples
 
         if size is None:
             # obtain a sample
-            sample = self._sample(self._choices)
+            sample = self._sample(self._choices, size=1)[0]
 
             # check for flat flag to see if array/dict is expected
             if flat:
                 # obtain sample from the dict
-                sample = np.array([s[0] for s in sample.values()])
+                sample = np.array(list(sample.values()))
 
             # return the sample
             return sample
@@ -94,83 +87,73 @@ class BaseSampler:
         # raise value error
         raise ValueError("The value %r cannot be specified as size, size expects an integer")
 
-    def _sample(self, choices):
+    def _sample(self, choices, size):        
         # init a dict to store samples
         self._cache = {}
 
         # iterate over the possible choices of the expression
+        self._dist_map = self._map_dist(choices)
+
+        # iterate over the possible choices of the expression
         for var_id, var_exp in choices.items():
-            # check if the expression is Float
-            if isinstance(var_exp, Float):
-                # check for existing key
-                if not var_id in self._cache:
-                    # add samples
-                    self._cache[var_id] = [self.distributions[var_id](loc=var_exp._low, \
-                                           scale=var_exp._high - var_exp._low, \
-                                           size=1, random_state=self.rng)]
-                else:
-                    # update the sample list
-                    self._cache[var_id].append(self.distributions[var_id](loc=var_exp._low, \
-                                           scale=var_exp._high - var_exp._low, \
-                                           size=1, random_state=self.rng))
+            if isinstance(self._dist_map[var_id], collections.abc.Callable):
+                # check if the expression is Float
+                if isinstance(var_exp, Float):
+                    self._cache[var_id] = self._dist_map[var_id](loc=var_exp._low, \
+                                                                 scale=var_exp._high - var_exp._low, \
+                                                                 size=size, random_state=self.rng)
 
-            # check if the expression is Int
-            if isinstance(var_exp, Int):
-                # check for existing key
-                if not var_id in self._cache:
-                    # add samples
-                    self._cache[var_id] = [self.distributions[var_id](low=var_exp._low, \
-                                               high=var_exp._high + 1, \
-                                               size=1, random_state=self.rng)]
-                else:
-                    # update the sample list
-                    self._cache[var_id].append(self.distributions[var_id](low=var_exp._low, \
-                                               high=var_exp._high + 1, \
-                                               size=1, random_state=self.rng))
+                # check if the expression is Int
+                if isinstance(var_exp, Int):
+                    self._cache[var_id] = self._dist_map[var_id](low=var_exp._low, \
+                                                                 high=var_exp._high + 1, \
+                                                                 size=size, random_state=self.rng)
 
-            # check if the expression is List
-            if isinstance(var_exp, List):
-                # check for existing key
-                if not var_id in self._cache:
-                    # add samples
-                    self._cache[var_id] = [self.distributions[var_id](low=0, high=var_exp._length(), \
-                                                                     size=1, random_state=self.rng)]
-                else:
-                    # update the sample list
-                    self._cache[var_id].append(self.distributions[var_id](low=0, high=var_exp._length(), \
-                                                                     size=1, random_state=self.rng))
+                # check if the expression is List
+                if isinstance(var_exp, List):
+                    self._cache[var_id] = self._dist_map[var_id](low=0, high=var_exp._length(), \
+                                                                 size=size, random_state=self.rng)
+
+            else:
+                self._cache[var_id] = self._dist_map[var_id]
+
+        # arrange the values by key
+        self._cache = [{var_id: self._cache[var_id][i] \
+                        for var_id in self._cache.keys()} for i in range(size)]
 
         # return the samples
         return self._cache
 
-    def _map_dist(self, distributions):
-        # create an empty dist map
-        dist_map = {}
+    def _map_dist(self, choices):
+        # map the default dist map
+        self._dist_map = {}
 
         # check if the distributions are passed
-        if distributions is None:
-            # map the default dist map
-            dist_map = {var_id: var_exp._dist if isinstance(var_exp, Int) or \
-                                      isinstance(var_exp, Float) or isinstance(var_exp, List) \
-                                      else None for var_id, var_exp in self.exp.choices().items()}
+        if self.distributions is None:
+            self._dist_map = {var_id: var_exp._dist if isinstance(var_exp, VarExpression) \
+                              else None for var_id, var_exp in choices.items()}
 
         # check if a distribution dict is passed
-        if isinstance(distributions, dict):
-            for var_id, distribution in distributions.items():
+        if isinstance(self.distributions, dict):
+            for var_id, distribution in self.distributions.items():
                 # collect respective distribution by key
-                if var_id in self.exp.choices().keys():
-                    dist_map[var_id] = distribution
+                if isinstance(var_id, str) and var_id in choices.keys():
+                    self._dist_map[var_id] = distribution
 
                 # if the variable is passed in an iterable
                 if isinstance(var_id, collections.abc.Iterable):
                     for var in var_id:
                         # check if the variable is valid
                         if var in self.exp.choices().keys():
-                            dist_map[var] = distribution
+                            self._dist_map[var] = distribution
 
-        # return the dist map
-        return dist_map
+            # map default distribution for the remaining variables
+            for var_id, var_exp in choices.items():
+                if isinstance(var_exp, VarExpression) and var_id not in self._dist_map:
+                    self._dist_map[var_id] = var_exp._dist
 
+        # return the distribution map
+        return self._dist_map
  
 class SamplerOld:
     def __init__(self, exp) -> None:
