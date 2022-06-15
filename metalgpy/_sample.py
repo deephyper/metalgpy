@@ -92,30 +92,14 @@ class BaseSampler:
         self._cache = {}
 
         # iterate over the possible choices of the expression
-        self._dist_map = self._map_dist(choices)
+        self._dist_map = self._map_dist(self.exp.variables())
 
         # iterate over the possible choices of the expression
-        for var_id, var_exp in choices.items():
-            if isinstance(self._dist_map[var_id], collections.abc.Callable):
-                # check if the expression is Float
-                if isinstance(var_exp, Float):
-                    self._cache[var_id] = self._dist_map[var_id](loc=var_exp._low, \
-                                                                 scale=var_exp._high - var_exp._low, \
-                                                                 size=size, random_state=self.rng)
-
-                # check if the expression is Int
-                if isinstance(var_exp, Int):
-                    self._cache[var_id] = self._dist_map[var_id](low=var_exp._low, \
-                                                                 high=var_exp._high + 1, \
-                                                                 size=size, random_state=self.rng)
-
-                # check if the expression is List
-                if isinstance(var_exp, List):
-                    self._cache[var_id] = self._dist_map[var_id](low=0, high=var_exp._length(), \
-                                                                 size=size, random_state=self.rng)
-
-            else:
-                self._cache[var_id] = self._dist_map[var_id]
+        for var_id, var_exp in self.exp.variables().items():
+            # check if the expression is Float
+            if isinstance(var_exp, VarExpression):
+                dist, params = self._dist_map[var_id]
+                self._cache[var_id] = dist.rvs(**params, size=size, random_state=self.rng)
 
         # arrange the values by key
         self._cache = [{var_id: self._cache[var_id][i] \
@@ -124,31 +108,31 @@ class BaseSampler:
         # return the samples
         return self._cache
 
-    def _map_dist(self, choices):
+    def _map_dist(self, variables):
         # map the default dist map
         self._dist_map = {}
 
         # check if the distributions are passed
         if self.distributions is None:
             self._dist_map = {var_id: var_exp._dist if isinstance(var_exp, VarExpression) \
-                              else None for var_id, var_exp in choices.items()}
+                              else None for var_id, var_exp in variables.items()}
 
         # check if a distribution dict is passed
         if isinstance(self.distributions, dict):
             for var_id, distribution in self.distributions.items():
                 # collect respective distribution by key
-                if isinstance(var_id, str) and var_id in choices.keys():
+                if isinstance(var_id, str) and var_id in variables.keys():
                     self._dist_map[var_id] = distribution
 
                 # if the variable is passed in an iterable
                 if isinstance(var_id, collections.abc.Iterable):
                     for var in var_id:
                         # check if the variable is valid
-                        if var in self.exp.choices().keys():
+                        if var in variables.keys():
                             self._dist_map[var] = distribution
 
             # map default distribution for the remaining variables
-            for var_id, var_exp in choices.items():
+            for var_id, var_exp in variables.items():
                 if isinstance(var_exp, VarExpression) and var_id not in self._dist_map:
                     self._dist_map[var_id] = var_exp._dist
 

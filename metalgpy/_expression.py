@@ -172,6 +172,11 @@ class Expression:
         raise NotImplementedError
 
     def variables(self):
+        """Retrieve all the ``VarExpression`` of the ``Expression``-tree.
+
+        Returns:
+            (dict): a dictionnary where keys are variable ``id`` and values are ``VarExpression`` instances.
+        """
         memo = {}
 
         def choice_aux(o):
@@ -187,6 +192,9 @@ class Expression:
             return memo
 
         tree.map_structure(choice_aux, self.__dict__)
+
+        if isinstance(self, VarExpression):
+            memo[self.id] = self
 
         return memo
 
@@ -508,7 +516,7 @@ class List(VarExpression):
         super().__init__(name=name)
         self._values = list(values)
         self._ordered = ordered
-        self._dist = scipy.stats.randint.rvs
+        self._dist = (scipy.stats.randint, {"low": 0, "high": self._length()})
 
     def __repr__(self) -> str:
         # return empty string notation if there aren't any values
@@ -598,7 +606,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint.rvs  # Default Distribution
+        self._dist = (scipy.stats.randint, {"low": self._low, "high": self._high + 1})
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -636,7 +644,7 @@ class Float(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.uniform.rvs
+        self._dist = (scipy.stats.uniform, {"loc": self._low, "scale": self._high - self._low})
 
     def __repr__(self) -> str:
         if not (self.value is None):
