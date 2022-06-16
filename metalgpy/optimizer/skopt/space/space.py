@@ -29,7 +29,7 @@ from .transformers import ToInteger
 
 from sklearn.impute import SimpleImputer
 
-from metalgpy.sampler import BaseSampler
+from metalgpy.sampler import RandomSampler
 
 
 # helper class to be able to print [1, ..., 4] instead of [1, '...', 4]
@@ -925,7 +925,7 @@ class Space(object):
             dimensions.
     """
 
-    def __init__(self, dimensions, expression, model_sdv=None):
+    def __init__(self, dimensions, sampler, model_sdv=None):
 
         # attributes used when a ConfigurationSpace from ConfigSpace is given
         self.imp_const = SimpleImputer(
@@ -940,9 +940,8 @@ class Space(object):
 
         self.hps_names = []
 
-        self.expression = expression
         self.dimensions = [check_dimension(dim) for dim in dimensions]
-        self.sampler = BaseSampler(expression)
+        self.sampler = sampler
 
     def __eq__(self, other):
         return all([a == b for a, b in zip(self.dimensions, other.dimensions)])

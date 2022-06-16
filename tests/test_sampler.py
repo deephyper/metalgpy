@@ -11,7 +11,7 @@ import scipy
 import collections
 import numpy as np
 import metalgpy as mpy
-from metalgpy.sampler import BaseSampler
+from metalgpy.sampler import RandomSampler
 
 
 @mpy.meta
@@ -49,17 +49,17 @@ class Net:
 
 
 class TestSampler(unittest.TestCase):
-    def test_BaseSampler(self):
+    def test_RandomSampler(self):
 
         rng = np.random.RandomState(42)
 
         program = f(mpy.Float(1, 5, name="x"), mpy.Float(1, 5, name="y"))
-        s = BaseSampler(program, rng=rng)
+        s = RandomSampler(program, rng=rng)
         size = 5
         samples = s.sample(size=size, flat=False)
 
         assert len(samples) == size
-        assert list(samples[1].keys()) == list(program.exp().variables().keys())
+        assert list(samples[1].keys()) == list(program.variables().keys())
 
         samples = s.sample(None, flat=False)
 
@@ -68,27 +68,27 @@ class TestSampler(unittest.TestCase):
         samples = s.sample(size, flat=True)
 
         assert isinstance(samples, np.ndarray)
-        assert samples.shape[1] == len(program.exp().variables().keys())
+        assert samples.shape[1] == len(program.variables().keys())
 
         program = f(mpy.Int(1, 5, name="x"), mpy.Float(1, 5, name="y"))
-        s = BaseSampler(program, rng=rng)
+        s = RandomSampler(program, rng=rng)
         samples = s.sample(flat=True)
 
         assert isinstance(samples, np.ndarray)
-        assert samples.shape[0] == len(program.exp().variables().keys())
+        assert samples.shape[0] == len(program.variables().keys())
 
         program = f(
             mpy.List([0, 1, 2, 3, 4], ordered=False, name="x"),
             mpy.List([0, 1, 2, 3, 4, 5], ordered=False, name="y"),
         )
-        s = BaseSampler(program, rng=rng)
+        s = RandomSampler(program, rng=rng)
         samples = s.sample(flat=False)
 
         assert isinstance(samples, dict) == True
 
         str_list = ["aaa", "bbb", "ccc", "ddd"]
         program = mpy.List(values=str_list, ordered=False, name="str_list")
-        s = BaseSampler(program, rng=rng)
+        s = RandomSampler(program, rng=rng)
         samples = s.sample()
 
         assert isinstance(samples, np.ndarray) == True
@@ -99,7 +99,7 @@ class TestSampler(unittest.TestCase):
         y = mpy.Float(1, 5, name="y")
         program = f(mpy.Float(1, 5, name="x"), y)
         dist_map = {"x": (scipy.stats.cauchy, {"loc": 1, "scale": 4})}
-        s = BaseSampler(program, dist_map, rng=rng)
+        s = RandomSampler(program, dist_map, rng=rng)
         samples = s.sample(size)
 
         assert samples.shape[0] == size
@@ -112,7 +112,7 @@ class TestSampler(unittest.TestCase):
             "x": (scipy.stats.cauchy, {"loc": 1, "scale": 4}),
             "y": (scipy.stats.binom, {"n": 5, "p": 0.4}),
         }
-        s = BaseSampler(program, dist_map, rng=rng)
+        s = RandomSampler(program, dist_map, rng=rng)
         samples = s.sample(size)
 
         assert isinstance(s._dist_map["x"][1], dict)
@@ -142,7 +142,7 @@ class TestSampler(unittest.TestCase):
             ("vy1", "vy3"): (scipy.stats.multivariate_normal, {"mean": 10, "cov": 8}),
         }
         program = f(var_x, var_y)
-        s = BaseSampler(program, dist_map, rng=rng)
+        s = RandomSampler(program, dist_map, rng=rng)
         samples = s.sample(3, flat=False)
 
         assert isinstance(samples[0], dict)
@@ -156,7 +156,7 @@ class TestSampler(unittest.TestCase):
         size = mpy.Int(1, 5, name="size")
         build_nd_array = mpy.meta(np.arange)
         program = build_nd_array(size)
-        s = BaseSampler(program, rng=rng)
+        s = RandomSampler(program, rng=rng)
         samples = s.sample(3, flat=False)
 
         assert isinstance(build_nd_array(samples[0]["size"]), collections.abc.Callable)
@@ -179,7 +179,7 @@ class TestSampler(unittest.TestCase):
         )
 
         program = Net([layer])
-        s = BaseSampler(program, rng=rng)
+        s = RandomSampler(program, rng=rng)
         samples = s.sample(10, flat=False)
         frozen_model_config = samples[-1]
         act_fn = program.variables()["activation"]._values[

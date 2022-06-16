@@ -18,7 +18,7 @@ def f(x):
 class TestOptimizer(unittest.TestCase):
 
 
-    def test_bayesian_optimizer(self):
+    def test_bayesian_optimizer_1(self):
         bb = f(mpy.Float(0, 10))
 
         variables = list(bb.variables().keys())
@@ -32,6 +32,23 @@ class TestOptimizer(unittest.TestCase):
             frozen_bb = bb.clone().freeze(x_dict)
             y = frozen_bb.evaluate()
             opt.tell(x, y, fit=True)
+            results.append(y)
+
+        assert min(results) < 0.1
+
+    def test_bayesian_optimizer_2(self):
+        bb = f(mpy.Float(0, 10))
+
+        results = []
+        for i, eval in mpy.sample(bb, rng=42):
+            
+            if i >= 20:
+                break
+
+            frozen_bb = bb.clone().freeze(eval.x)
+            y = frozen_bb.evaluate()
+            eval.report(y)
+            print(y)
             results.append(y)
 
         assert min(results) < 0.1

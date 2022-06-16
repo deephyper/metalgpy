@@ -331,7 +331,7 @@ def has_gradients(estimator):
     return not categorical_gp
 
 
-def cook_estimator(base_estimator, dimensions=None, expression=None, **kwargs):
+def cook_estimator(base_estimator, dimensions=None, sampler=None, **kwargs):
     """Cook a default estimator.
 
     For the special base_estimator called "DUMMY" the return value is None.
@@ -368,8 +368,8 @@ def cook_estimator(base_estimator, dimensions=None, expression=None, **kwargs):
 
     if base_estimator == "GP":
         if dimensions is not None:
-            space = Space(dimensions, expression)
-            space = Space(normalize_dimensions(dimensions, expression), expression)
+            space = Space(dimensions, sampler)
+            space = Space(normalize_dimensions(dimensions, sampler), sampler)
             n_dims = space.transformed_n_dims
             is_cat = space.is_categorical
         else:
@@ -570,7 +570,7 @@ def point_aslist(search_space, point_as_dict):
     return point_as_list
 
 
-def normalize_dimensions(dimensions, expression):
+def normalize_dimensions(dimensions, sampler):
     """Create a ``Space`` where all dimensions are normalized to unit range.
 
     This is particularly useful for Gaussian process based regressors and is
@@ -593,7 +593,7 @@ def normalize_dimensions(dimensions, expression):
          NOTE: The upper and lower bounds are inclusive for `Integer`
          dimensions.
     """
-    space = Space(dimensions, expression)
+    space = Space(dimensions, sampler)
     transformed_dimensions = []
     for dimension in space.dimensions:
         # check if dimension is of a Dimension instance
@@ -605,7 +605,7 @@ def normalize_dimensions(dimensions, expression):
         else:
             raise RuntimeError("Unknown dimension type " "(%s)" % type(dimension))
 
-    return Space(transformed_dimensions, space.expression)
+    return Space(transformed_dimensions, sampler)
 
 
 def check_list_types(x, types):

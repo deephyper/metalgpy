@@ -5,31 +5,23 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-
-from scipy.optimize import fmin_l_bfgs_b
-
-from sklearn.base import clone
-from sklearn.base import is_regressor
 from joblib import Parallel, delayed
+from metalgpy.sampler import BaseSampler, RandomSampler
+from scipy.optimize import fmin_l_bfgs_b
+from sklearn.base import clone, is_regressor
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.utils import check_random_state
 
-from ..acquisition import _gaussian_acquisition
-from ..acquisition import gaussian_acquisition_1D
-from ..acquisition import gaussian_lcb
-from ..learning import GaussianProcessRegressor
-from ..space import Categorical
-from ..space import Space
-from ..utils import check_x_in_space
-from ..utils import cook_estimator
-from ..utils import create_result
-from ..utils import has_gradients
-from ..utils import is_listlike
-from ..utils import is_2Dlistlike
-from ..utils import normalize_dimensions
-from ..utils import cook_initial_point_generator
-from .utils import convert_to_skopt_space
 from ..._base_optimizer import Optimizer
+from ..acquisition import (_gaussian_acquisition, gaussian_acquisition_1D,
+                           gaussian_lcb)
+from ..learning import GaussianProcessRegressor
+from ..space import Categorical, Space
+from ..utils import (check_x_in_space, cook_estimator,
+                     cook_initial_point_generator, create_result,
+                     has_gradients, is_2Dlistlike, is_listlike,
+                     normalize_dimensions)
+from .utils import convert_to_skopt_space
 
 
 class ExhaustedSearchSpace(RuntimeError):
@@ -188,7 +180,7 @@ class BayesianOptimizer(Optimizer):
 
     def __init__(
         self,
-        expression,
+        sampler,
         base_estimator="gp",
         n_random_starts=None,
         n_initial_points=10,
@@ -209,8 +201,14 @@ class BayesianOptimizer(Optimizer):
         del args["self"]
         self.specs = {"args": args, "function": "Optimizer"}
         self.rng = check_random_state(random_state)
-        self.expression = expression
-        dimensions = convert_to_skopt_space(expression, surrogate_model=base_estimator)
+        self.sampler = (
+            sampler
+            if isinstance(sampler, BaseSampler)
+            else RandomSampler(sampler, rng=random_state)
+        )
+        dimensions = convert_to_skopt_space(
+            sampler.expression, surrogate_model=base_estimator
+        )
 
         # Configure acquisition function
 
@@ -260,7 +258,7 @@ class BayesianOptimizer(Optimizer):
             base_estimator = cook_estimator(
                 base_estimator,
                 dimensions=dimensions,
-                expression=expression,
+                sampler=self.sampler,
                 random_state=self.rng.randint(0, np.iinfo(np.int32).max),
                 n_jobs=n_jobs,
             )
@@ -316,12 +314,12 @@ class BayesianOptimizer(Optimizer):
 
         # normalize space if GP regressor
         if isinstance(self.base_estimator_, GaussianProcessRegressor):
-            dimensions = normalize_dimensions(dimensions, expression)
+            dimensions = normalize_dimensions(dimensions, self.sampler)
 
         # keep track of the generative model from sdv
         self.model_sdv = model_sdv
 
-        self.space = Space(dimensions, expression, model_sdv=self.model_sdv)
+        self.space = Space(dimensions, self.sampler, model_sdv=self.model_sdv)
 
         self._initial_samples = [] if initial_points is None else initial_points[:]
         self._initial_point_generator = cook_initial_point_generator(
@@ -386,7 +384,7 @@ class BayesianOptimizer(Optimizer):
         """
 
         optimizer = Optimizer(
-            expression=self.expression,
+            sampler=self.sampler,
             base_estimator=self.base_estimator_,
             n_initial_points=self.n_initial_points_,
             initial_point_generator=self._initial_point_generator,
