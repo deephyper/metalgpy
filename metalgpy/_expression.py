@@ -172,6 +172,11 @@ class Expression:
         raise NotImplementedError
 
     def variables(self):
+        """Retrieve all the ``VarExpression`` of the ``Expression``-tree.
+
+        Returns:
+            (dict): a dictionnary where keys are variable ``id`` and values are ``VarExpression`` instances.
+        """
         memo = {}
 
         def choice_aux(o):
@@ -187,6 +192,9 @@ class Expression:
             return memo
 
         tree.map_structure(choice_aux, self.__dict__)
+
+        if isinstance(self, VarExpression):
+            memo[self.id] = self
 
         return memo
 
@@ -508,6 +516,7 @@ class List(VarExpression):
         super().__init__(name=name)
         self._values = list(values)
         self._ordered = ordered
+        self._dist = (scipy.stats.randint, {"low": 0, "high": self._length()})
 
     def __repr__(self) -> str:
         # return empty string notation if there aren't any values
@@ -562,57 +571,6 @@ class List(VarExpression):
             if isinstance(self.value, Expression):
                 self.value.freeze(choice)
 
-    # def _sample(self, size=None, rng=None, memo=None):
-
-    #     if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
-
-    #         # equivalent to constant 0
-    #         if self._invariant:
-    #             idx = np.zeros((size,)) if size else 0
-
-    #         # equivalent to categorical of len(values)
-    #         else:
-    #             idx = rng.choice(self._length(), size=size)
-
-    #     else:  # k >= 1
-
-    #         # equivalent to constant k so "replace" is ignored
-    #         if self._invariant:
-    #             if isinstance(self._k, VarExpression):
-    #                 idx = self._k.sample(size, rng, memo)
-    #             else:
-    #                 idx = np.full((size,), self._k)
-
-    #         # k Categorical of len(values)
-    #         else:
-
-    #             if isinstance(self._k, VarExpression):
-    #                 sample_size = self._k.sample(size, rng, memo)
-
-    #                 if size:  # sample size is an array
-    #                     idx = [
-    #                         rng.choice(
-    #                             self._length(),
-    #                             size=sample_size[i],
-    #                             replace=self._replace,
-    #                         ).tolist()
-    #                         for i in range(size)
-    #                     ]
-    #                 else:  # sample size is a scalar
-    #                     idx = rng.choice(
-    #                         self._length(),
-    #                         size=sample_size,
-    #                         replace=self._replace,
-    #                     )
-    #             else:  # self._k is and int
-    #                 idx = rng.choice(
-    #                     self._length(),
-    #                     size=self._k,
-    #                     replace=self._replace,
-    #                 )
-
-    #     return idx
-
     def child_choices(self):
         memo = {}
 
@@ -648,7 +606,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint  # Default Distribution
+        self._dist = (scipy.stats.randint, {"low": self._low, "high": self._high + 1})
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -674,22 +632,6 @@ class Int(VarExpression):
                 )
         self.value = choice
 
-    def _sample(self, size=None, rng=None, memo=None):
-
-        low = (
-            self._low.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._low, VarExpression)
-            else self._low
-        )
-        high = (
-            self._high.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._high, VarExpression)
-            else self._high
-        )
-
-        return self._dist.rvs(low, high+1, size=size, random_state=rng)
-
-
 class Float(VarExpression):
     """Defines a continuous variable.
 
@@ -702,7 +644,7 @@ class Float(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.uniform
+        self._dist = (scipy.stats.uniform, {"loc": self._low, "scale": self._high - self._low})
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -728,17 +670,4 @@ class Float(VarExpression):
                 )
         self.value = choice
 
-    def _sample(self, size=None, rng=None, memo=None):
 
-        low = (
-            self._low.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._low, VarExpression)
-            else self._low
-        )
-        high = (
-            self._high.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._high, VarExpression)
-            else self._high
-        )
-
-        return self._dist.rvs(loc=low, scale=high - low, size=size, random_state=rng)
