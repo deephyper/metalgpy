@@ -48,10 +48,3 @@ class TestHierarchical(unittest.TestCase):
         res = program.evaluate()
         assert res == 6
 
-    def test_3(self):
-        rng = np.random.RandomState(42)
-        program = h(mpy.List([f(mpy.List([1,3,5])), g(mpy.List([2,4,6]))]))
-        choices = program.choices()
-        d = mpy.sample_from_choices(choices, rng)
-        print(d)
-        assert d == {"2": 0, "0": 0}

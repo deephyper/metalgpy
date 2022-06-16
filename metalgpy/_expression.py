@@ -153,6 +153,8 @@ class Expression:
 
         tree.map_structure(freeze_aux, self.__dict__)
 
+        return self
+
     def evaluate_children(self):
 
         # propagate the evaluation

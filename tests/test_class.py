@@ -8,7 +8,6 @@ PKG = os.path.join(HERE, "..")
 sys.path.insert(0, PKG)
 
 import metalgpy as mpy
-import numpy as np
 
 
 @mpy.meta
@@ -21,27 +20,22 @@ class Foo:
 
 
 class TestFunctional(unittest.TestCase):
-
     def setUp(self):
         # initialization for test
-        mpy.VarExpression.var_id = 0 
+        mpy.VarExpression.var_id = 0
 
     def test_class_call(self):
-        
-
-        rng = np.random.RandomState(42)
 
         foo = Foo(mpy.List([1, 2, 3]))
         foo_choices = foo.choices()
         assert len(foo_choices) == 1
-        assert foo_choices["0"] == mpy.List([1,2,3])
+        assert foo_choices["0"] == mpy.List([1, 2, 3])
         y = foo(mpy.List([4, 5, 6]))
         y_choices = y.choices()
         assert len(y_choices) == 2
-        assert y_choices["0"] == mpy.List([1,2,3])
-        assert y_choices["2"] == mpy.List([4,5,6])
-        choice = {k:v.sample(rng=rng) for k,v in y_choices.items()}
-        assert choice == {"0": 2, "2": 0}
+        assert y_choices["0"] == mpy.List([1, 2, 3])
+        assert y_choices["2"] == mpy.List([4, 5, 6])
+        choice = {"0": 2, "2": 0}
         y.freeze(choice)
         res = y.evaluate()
         assert res == -1
@@ -51,8 +45,8 @@ class TestFunctional(unittest.TestCase):
         foo = Foo(mpy.List([1, 2, 3]))
         foo_choices = foo.choices()
         assert len(foo_choices) == 1
-        assert foo_choices["0"] == mpy.List([1,2,3])
+        assert foo_choices["0"] == mpy.List([1, 2, 3])
         a = foo.a
-        a.freeze({"0":0})
+        a.freeze({"0": 0})
         res = a.evaluate()
         assert res == 1
