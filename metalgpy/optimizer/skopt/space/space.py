@@ -927,7 +927,6 @@ class Space(object):
 
     def __init__(self, dimensions, sampler, model_sdv=None):
 
-        # attributes used when a ConfigurationSpace from ConfigSpace is given
         self.imp_const = SimpleImputer(
             missing_values=np.nan, strategy="constant", fill_value=-1000
         )

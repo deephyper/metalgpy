@@ -25,7 +25,7 @@ from .utils import convert_to_skopt_space
 
 
 class ExhaustedSearchSpace(RuntimeError):
-    """ "Raised when the search cannot sample new points from the ConfigSpace."""
+    """Raised when the search cannot sample new unique points."""
 
     def __str__(self):
         return f"The search space is exhausted and cannot sample new unique points!"
@@ -943,13 +943,6 @@ class BayesianOptimizer(Optimizer):
                 # note the need for [0] at the end
                 self._next_x = self.space.inverse_transform(next_x.reshape((1, -1)))[0]
 
-        # Pack results
-        result = create_result(
-            self.Xi, self.yi, self.space, self.rng, models=self.models
-        )
-
-        result.specs = self.specs
-        return result
 
     def _check_y_is_valid(self, x, y):
         """Check if the shape and types of x and y are consistent."""

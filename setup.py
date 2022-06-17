@@ -1,18 +1,14 @@
 import os
 import sys
 
-from setuptools import Command, find_packages, setup
+from setuptools import Command, setup
 from shutil import rmtree
 
 # path of the directory where this file is located
 here = os.path.abspath(os.path.dirname(__file__))
 
 # What packages are required for this module to be executed?
-REQUIRED = [
-    "dm-tree",
-    "numpy",
-    "scipy",
-]
+REQUIRED = ["dm-tree", "numpy", "scipy", "pandas", "scikit-learn"]
 
 EXTRAS = {"dev": ["twine", "black"]}
 
