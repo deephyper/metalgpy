@@ -438,7 +438,10 @@ class ObjectExpression(Expression):
             )
 
     def __repr__(self):
-        return self._obj.__repr__()
+        try:
+            return self._obj.__repr__()
+        except:
+            return str(self._obj)
 
     def evaluate(self):
         self.evaluate_children()
@@ -559,7 +562,7 @@ class List(VarExpression):
 
     def freeze(self, choice: dict):
         # obtain the index of intended frozen choice
-        idx = choice[self.id]
+        idx = int(choice[self.id])
 
         # obtain value of a single item
         self.value = self._getitem(idx)
@@ -632,7 +635,7 @@ class Int(VarExpression):
                 raise ValueError(
                     f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
                 )
-        self.value = choice
+        self.value = int(choice)
 
 class Float(VarExpression):
     """Defines a continuous variable.
@@ -670,6 +673,6 @@ class Float(VarExpression):
                 raise ValueError(
                     f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
                 )
-        self.value = choice
+        self.value = float(choice)
 
 
