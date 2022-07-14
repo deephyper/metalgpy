@@ -14,7 +14,7 @@ from time import time
 
 import numpy as np
 
-from deephyper.skopt.utils import dump
+from metalgpy.optimizer.skopt.utils import dump
 
 
 def check_callback(callback):
