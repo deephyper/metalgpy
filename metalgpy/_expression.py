@@ -153,6 +153,8 @@ class Expression:
 
         tree.map_structure(freeze_aux, self.__dict__)
 
+        return self
+
     def evaluate_children(self):
 
         # propagate the evaluation
@@ -172,6 +174,11 @@ class Expression:
         raise NotImplementedError
 
     def variables(self):
+        """Retrieve all the ``VarExpression`` of the ``Expression``-tree.
+
+        Returns:
+            (dict): a dictionnary where keys are variable ``id`` and values are ``VarExpression`` instances.
+        """
         memo = {}
 
         def choice_aux(o):
@@ -187,6 +194,9 @@ class Expression:
             return memo
 
         tree.map_structure(choice_aux, self.__dict__)
+
+        if isinstance(self, VarExpression):
+            memo[self.id] = self
 
         return memo
 
@@ -256,7 +266,8 @@ class UnaryExpression(Expression):
     def evaluate(self):
         self.evaluate_children()
 
-        operator_implementation = getattr(self.x, UNA_OPS_SYNTAX_2_ATTR[self.operator])
+        operator_implementation = getattr(
+            self.x, UNA_OPS_SYNTAX_2_ATTR[self.operator])
 
         return operator_implementation()
 
@@ -427,7 +438,10 @@ class ObjectExpression(Expression):
             )
 
     def __repr__(self):
-        return self._obj.__repr__()
+        try:
+            return self._obj.__repr__()
+        except:
+            return str(self._obj)
 
     def evaluate(self):
         self.evaluate_children()
@@ -495,44 +509,47 @@ class VarExpression(Expression):
 
 class List(VarExpression):
     """Represent a categorical choice.
-
     Args:
         values (iterable): an interable with possible values.
-        k (int, optional): the number of values selected in values. Defaults to None.
-        replace (bool, optional): draw from values with replacement. Defaults to False.
-        invariant (bool, optional): values is permutation invariant (e.g., a list of same object types). Defaults to True.
+        ordered (bool, optional): a flag to specify the type of categorical variable (nominal vs ordinal). Defaults to False.
+        name (str, optional): name of the potential variable to be stored in the configuration space. Defaults to None.
     """
-
-    def __init__(self, values, k=None, replace=False, invariant=False, name=None):
-
+    def __init__(self,
+                 values,
+                 ordered=False,
+                 name=None):
         super().__init__(name=name)
         self._values = list(values)
-        self._k = k
-        self._replace = replace
-        self._invariant = invariant
+        self._ordered = ordered
+        self._dist = (scipy.stats.randint, {"low": 0, "high": self._length()})
 
     def __repr__(self) -> str:
+        # return empty string notation if there aren't any values
         if not (self.value is None):
             return self.value.__repr__()
         else:
+            # showcase the items in the list
             str_ = str(self._values)
-            if self._k:
-                str_ += f", k={self._k}"
-            if self._replace:
-                str_ += f", replace={self._replace}"
-            if self._invariant:
-                str_ += f", invariant={self._invariant}"
+            if self._ordered:
+                str_ += f", ordered={self._ordered}"
             return f"List(id={self.id}, {str_})"
 
     def _getitem(self, item):
+        # check if the values specified in the expression are integers
         if np.issubdtype(type(item), np.integer):
             return self._values[item]
+
+        # for any other type of iterate, simply iterate over the possible list of choices
         elif isinstance(item, collections.abc.Iterable):
             return [self._values[i] for i in item]
+
+        # raise an exception if a non-iterable index is present in the list of passed values
         else:
-            raise ValueError(f"index of List should be int or iterable but is {item} with type '{type(item)}'!")
+            raise ValueError(
+                f"index of List should be int or iterable but is {item} with type '{type(item)}'!")
 
     def _length(self):
+        # return length of given Variable expression
         return len(self._values)
 
     def __eq__(self, other):
@@ -540,43 +557,17 @@ class List(VarExpression):
         return (
             b
             and self._values == other._values
-            and self._k == other._k
-            and self._replace == other._replace
+            and self._ordered == other._ordered
         )
 
     def freeze(self, choice: dict):
+        # obtain the index of intended frozen choice
+        idx = int(choice[self.id])
 
-        if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
-            idx = choice[self.id]
-
-            # equivalent to constant 0
-            if self._invariant:
-                assert idx == 0
-
-            # equivalent to categorical of len(values)
-            else:
-                assert 0 <= idx and idx < self._length()
-                
-
-        else:  # k >= 1
-
-            # equivalent to constant k so "replace" is ignored
-            if self._invariant:
-                
-                if isinstance(self._k, VarExpression):
-                    # TODO: add assert
-                    idx = [i for i in range(choice[self._k.id])]
-                else:
-                    # TODO: add assert
-                    idx = [i for i in range(choice[self.id])]
-
-            # k Categorical of len(values)
-            else:
-                idx = choice[self.id]
-                assert isinstance(idx, list), "should be a list of 'k' indexes"
-                
+        # obtain value of a single item
         self.value = self._getitem(idx)
 
+        # freeze the list of choices
         if isinstance(idx, collections.abc.Iterable):
             for i in idx:
                 if isinstance(self.value[i], Expression):
@@ -585,62 +576,8 @@ class List(VarExpression):
             if isinstance(self.value, Expression):
                 self.value.freeze(choice)
 
-    def _sample(self, size=None, rng=None, memo=None):
-
-        if self._k is None:  # "replace" is ignored (only 1 sample is drawn)
-
-            # equivalent to constant 0
-            if self._invariant:
-                idx = np.zeros((size,)) if size else 0
-
-            # equivalent to categorical of len(values)
-            else:
-                idx = rng.choice(self._length(), size=size)
-
-        else:  # k >= 1
-
-            # equivalent to constant k so "replace" is ignored
-            if self._invariant:
-                if isinstance(self._k, VarExpression):
-                    idx = self._k.sample(size, rng, memo)
-                else:
-                    idx = np.full((size,), self._k)
-
-            # k Categorical of len(values)
-            else:
-
-                if isinstance(self._k, VarExpression):
-                    sample_size = self._k.sample(size, rng, memo)
-
-                    if size:  # sample size is an array
-                        idx = [
-                            rng.choice(
-                                self._length(),
-                                size=sample_size[i],
-                                replace=self._replace,
-                            ).tolist()
-                            for i in range(size)
-                        ]
-                    else:  # sample size is a scalar
-                        idx = rng.choice(
-                            self._length(),
-                            size=sample_size,
-                            replace=self._replace,
-                        )
-                else:  # self._k is and int
-                    idx = rng.choice(
-                        self._length(),
-                        size=self._k,
-                        replace=self._replace,
-                    )
-
-        return idx
-
     def child_choices(self):
         memo = {}
-
-        if isinstance(self._k, Expression):
-            memo[self._k.id] = self._k.choices()
 
         for i in range(len(self)):
             value_i = self._getitem(i)
@@ -674,7 +611,7 @@ class Int(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.randint # Default Distribution
+        self._dist = (scipy.stats.randint, {"low": self._low, "high": self._high + 1})
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -698,22 +635,7 @@ class Int(VarExpression):
                 raise ValueError(
                     f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
                 )
-        self.value = choice
-
-    def _sample(self, size=None, rng=None, memo=None):
-
-        low = (
-            self._low.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._low, VarExpression)
-            else self._low
-        )
-        high = (
-            self._high.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._high, VarExpression)
-            else self._high
-        )
-
-        return self._dist.rvs(low, high+1, size=size, random_state=rng)
+        self.value = int(choice)
 
 class Float(VarExpression):
     """Defines a continuous variable.
@@ -727,7 +649,7 @@ class Float(VarExpression):
         super().__init__(name=name)
         self._low = low
         self._high = high
-        self._dist = scipy.stats.uniform
+        self._dist = (scipy.stats.uniform, {"loc": self._low, "scale": self._high - self._low})
 
     def __repr__(self) -> str:
         if not (self.value is None):
@@ -751,20 +673,6 @@ class Float(VarExpression):
                 raise ValueError(
                     f"choice for variable {self} should be between [{self._low}, {self._high}] but is {choice}"
                 )
-        self.value = choice
+        self.value = float(choice)
 
-    def _sample(self, size=None, rng=None, memo=None):
-
-        low = (
-            self._low.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._low, VarExpression)
-            else self._low
-        )
-        high = (
-            self._high.sample(size=size, rng=rng, memo=memo)
-            if isinstance(self._high, VarExpression)
-            else self._high
-        )
-
-        return self._dist.rvs(loc=low, scale=high - low, size=size, random_state=rng)
 

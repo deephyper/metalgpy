@@ -18,6 +18,8 @@ def layers(*args):
 
 
 class TestNested(unittest.TestCase):
+    
+    @unittest.skip
     def test_Int(self):
 
         rng = np.random.RandomState(42)
@@ -34,6 +36,7 @@ class TestNested(unittest.TestCase):
             units = sample_program.evaluate()
             assert units == (220, 52, 38, 33)
 
+    @unittest.skip
     def test_Float(self):
 
         rng = np.random.RandomState(42)

@@ -2,7 +2,7 @@ from ._expression import ObjectExpression
 
 
 def meta(obj):
-    """Transform an object into a ObjectExpression Object."""
+    """Transform an object into an ``ObjectExpression`` Object."""
 
     cls_attrs = {}
     meta_class = type(
