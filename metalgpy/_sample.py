@@ -16,7 +16,21 @@ class Evaluation:
             self.optimizer.tell(self._x_vec, y, fit=True)
 
 
-def sample(sampler, optimizer=None, rng=None):
+def sample(sampler, optimizer=None, size=None, rng=None):
+    """Iterate over optimization steps.
+
+    Args:
+        sampler (Expression or BaseSampler): an expression or a subclass from ``BaseSampler``.
+        optimizer (Optimizer, optional): a subclass from ``Optimizer``. Defaults to ``None`` for ``BayesianOptimizer``.
+        size (int, optional): the number of iterations to perform. Defaults to ``None`` for infinite.
+        rng (int or np.RandomState, optional): the random state of the optimization process. Defaults to ``None``.
+
+    Raises:
+        ValueError: if the sampler is of the wrong type.
+
+    Yields:
+        int, Evaluation: a tuple corresponding to the iteration and an ``Evaluation`` object.
+    """
 
     # check the value passed for sampler
     if isinstance(sampler, Expression):
@@ -40,5 +54,10 @@ def sample(sampler, optimizer=None, rng=None):
 
         x = optimizer.ask()
         x_dict = to_dict(x)
-        yield i, Evaluation(x_dict, optimizer)
         i += 1
+
+        yield i, Evaluation(x_dict, optimizer)
+
+        # exit
+        if size is not None and i >= size:
+            break
