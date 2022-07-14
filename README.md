@@ -4,13 +4,13 @@ What if we could write a program that generates programs? Inspired by Automated 
 
 > :warning: **Experimental**: Contributions are welcome!
 
-## Install
+## Installation
 
 ```console
 pip install metalgpy
 ```
 
-## Example
+## Quickstart
 
 A simple but detailed example:
 
@@ -84,4 +84,48 @@ Variable Space:  {'0': Float(id=0, low=0, high=10)}
 30 -> f(0.07218850699949093) = 0.005211180542815551
 31 -> f(0.08273460533704255) = 0.006845014920276189
 32 -> f(0.004884441886340666) = 2.3857772541039158e-05
+```
+
+## Overview
+
+Demonstrate features with short examples. In these examples we assume that the package is imported such as:
+
+```python
+import metalgpy as mpy
+```
+
+### Symbols
+
+Transform a python object into a symbol with:
+
+```
+@mpy.meta
+def foo(...):
+    ...
+
+@mpy.meta
+class Foo:
+    ...
+```
+
+### Variables
+
+```python
+mpy.Float(0, 10) # float in [0, 10] interval with implicit name
+mpy.Float(0, 10, name="x") # explicit name
+mpy.Int(0, 10) # integer in [0, 10]
+mpy.List([True, False]) # categorical nominal
+mpy.List(["bad", "medium", "good"], ordered=True) # categorical ordinal
+```
+
+### Expressions
+
+Build expressions of symbols with:
+
+* arithmetic
+```python
+a = mpy.Float(0, 10, name="a")
+b = mpy.Float(0, 10, name="b")
+
+total = a + b
 ```
