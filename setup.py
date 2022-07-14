@@ -8,7 +8,7 @@ from shutil import rmtree
 here = os.path.abspath(os.path.dirname(__file__))
 
 # What packages are required for this module to be executed?
-REQUIRED = ["dm-tree", "numpy", "scipy", "pandas", "scikit-learn"]
+REQUIRED = ["dm-tree", "numpy", "scipy", "pandas", "scikit-learn", "packaging", "pyyaml"]
 
 EXTRAS = {"dev": ["twine", "black"]}
 
