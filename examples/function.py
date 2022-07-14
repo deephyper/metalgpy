@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import metalgpy as mpy
 
 # the @mpy.meta decorator transform an original python code 
